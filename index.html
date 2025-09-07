@@ -36,7 +36,7 @@
         <label>Фотографии (можно несколько, порядок важен)</label>
         <input id="imagesInput" type="file" accept="image/*" multiple />
 
-        <label>Текст для подписей — общий блок. Пустая строка = новый абзац → подпись для следующей картинки</label>
+        <label>Текст — общий блок. Пустая строка = новый абзац → подпись для следующей картинки</label>
         <textarea id="captions" placeholder="Абзац 1&#10;&#10;Абзац 2&#10;&#10;Абзац 3 ..."></textarea>
 
         <div class="row">
@@ -131,16 +131,16 @@
     const padding      = $("padding");
     const safeBottom   = $("safeBottom");
     const textWidthPct = $("textWidthPct");
-    const renderBtn    = $("renderBtn");
     const results      = $("results");
     const overlayStatus= $("overlayStatus");
 
+    // --- utils ---
     function loadImageFromFile(file){
       return new Promise((resolve,reject)=>{
         const url = URL.createObjectURL(file);
         const img = new Image();
         img.onload=()=>{ URL.revokeObjectURL(url); resolve(img); };
-        img.onerror=reject;
+        img.onerror=(e)=>{ URL.revokeObjectURL(url); reject(e); };
         img.src=url;
       });
     }
@@ -160,7 +160,6 @@
     function drawMultiline(ctx, lines, x, y){
       ctx.textAlign = textAlign.value;
       ctx.textBaseline = "top";
-      if(ctx.shadowBlur){ ctx.shadowBlur=0; ctx.shadowOffsetY=0; }
       const step = (parseFloat(lineHeight.value)/100 * parseInt(fontSize.value,10));
       for(let i=0;i<lines.length;i++){
         const ly = y + i * step;
@@ -174,88 +173,84 @@
       }
     }
 
-    async function findOverlay(){
-      const names = ["overlay.png","Overlay.png","Backgroung.png","background.png","Background.png"];
-      for(const n of names){
-        try{
-          const resp = await fetch(n+"?v="+Date.now(), {cache:"no-store"});
-          if(resp.ok){
-            const blob = await resp.blob();
-            const url = URL.createObjectURL(blob);
-            const img = new Image();
-            await new Promise((res,rej)=>{ img.onload=res; img.onerror=rej; img.src=url; });
-            return {img,name:n};
-          }
-        }catch(e){}
-      }
-      return {img:null,name:null};
+    // Надёжная загрузка подложки без fetch: по очереди пробуем имена
+    function loadOverlaySequential(names){
+      return new Promise((resolve)=>{
+        let idx = 0;
+        const tryNext = ()=>{
+          if(idx>=names.length) return resolve({img:null,name:null});
+          const img = new Image();
+          img.onload = ()=> resolve({img,name:names[idx]});
+          img.onerror = ()=> { idx++; tryNext(); };
+          img.src = names[idx] + "?v=" + Date.now(); // анти-кэш
+        };
+        tryNext();
+      });
     }
 
     async function render(){
-      results.innerHTML="";
-      const files = Array.from(imagesInput.files||[]);
-      if(files.length===0){ alert("Добавь хотя бы одну фотографию"); return; }
+      try{
+        results.innerHTML="";
+        const files = Array.from(imagesInput.files||[]);
+        if(files.length===0){ alert("Добавь хотя бы одну фотографию"); return; }
 
-      const {img:overlayImg,name:overlayName} = await findOverlay();
-      overlayStatus.textContent = overlayImg ? `Подложка: найдена (${overlayName})` : "Подложка: не найдена";
+        const {img:overlayImg,name:overlayName} = await loadOverlaySequential(["Backgroung.png","overlay.png","Overlay.png","background.png","Background.png"]);
+        overlayStatus.textContent = overlayImg ? `Подложка: найдена (${overlayName})` : "Подложка: не найдена (рендер без неё)";
 
-      const captions = captionsEl.value.split(/\n\s*\n/g).map(s=>s.trim()).filter(Boolean);
+        const captions = captionsEl.value.split(/\n\s*\n/g).map(s=>s.trim());
 
-      for(let i=0;i<files.length;i++){
-        const photo = await loadImageFromFile(files[i]);
-        const W = overlayImg? overlayImg.naturalWidth  : photo.naturalWidth;
-        const H = overlayImg? overlayImg.naturalHeight : photo.naturalHeight;
+        for(let i=0;i<files.length;i++){
+          const photo = await loadImageFromFile(files[i]);
+          const W = overlayImg? overlayImg.naturalWidth  : photo.naturalWidth;
+          const H = overlayImg? overlayImg.naturalHeight : photo.naturalHeight;
 
-        const c = document.createElement("canvas"); c.width=W; c.height=H;
-        const ctx = c.getContext("2d");
+          const c = document.createElement("canvas"); c.width=W; c.height=H;
+          const ctx = c.getContext("2d");
 
-        const scale = Math.max(W/photo.naturalWidth, H/photo.naturalHeight);
-        const drawW = photo.naturalWidth*scale;
-        const drawH = photo.naturalHeight*scale;
-        const dx = (W-drawW)/2;
-        const dy = (H-drawH)/2;
-        ctx.drawImage(photo, dx, dy, drawW, drawH);
+          // фото как cover
+          const scale = Math.max(W/photo.naturalWidth, H/photo.naturalHeight);
+          const drawW = photo.naturalWidth*scale;
+          const drawH = photo.naturalHeight*scale;
+          const dx = (W-drawW)/2;
+          const dy = (H-drawH)/2;
+          ctx.drawImage(photo, dx, dy, drawW, drawH);
 
-        ctx.font = `${parseInt(fontSize.value,10)}px ${fontFamily.value}`;
-        const maxW = Math.round(W * (parseInt(textWidthPct.value||88,10)/100));
-        const lines = captions[i] ? wrapText(ctx, captions[i], maxW) : [];
+          // текст
+          ctx.font = `${parseInt(fontSize.value,10)}px ${document.getElementById('fontFamily').value}`;
+          const maxW = Math.round(W * (parseInt(textWidthPct.value||88,10)/100));
+          const lines = (captions[i]||"").trim()? wrapText(ctx, captions[i], maxW) : [];
 
-        const textAreaLeft = (W - maxW)/2;
-        const pad = parseInt(padding.value,10);
-        let x = textAreaLeft + pad;
-        if(textAlign.value==="center") x = W/2;
-        if(textAlign.value==="right")  x = W - textAreaLeft - pad;
+          const areaLeft = (W - maxW)/2;
+          const pad = parseInt(padding.value,10);
+          let x = areaLeft + pad;
+          if(document.getElementById('textAlign').value==="center") x = W/2;
+          if(document.getElementById('textAlign').value==="right")  x = W - areaLeft - pad;
 
-        const step = (parseFloat(lineHeight.value)/100 * parseInt(fontSize.value,10));
-        const textBlockH = lines.length * step;
-        const bottomLimit = H - parseInt(safeBottom.value||0,10);
-        const y = Math.max(pad, bottomLimit - textBlockH - 4);
+          const step = (parseFloat(lineHeight.value)/100 * parseInt(fontSize.value,10));
+          const blockH = lines.length * step;
+          const bottomLimit = H - parseInt(safeBottom.value||0,10);
+          const y = Math.max(pad, bottomLimit - blockH - 4);
 
-        drawMultiline(ctx, lines, x, y);
+          drawMultiline(ctx, lines, x, y);
 
-        if(overlayImg) ctx.drawImage(overlayImg, 0, 0, W, H);
+          if(overlayImg) ctx.drawImage(overlayImg, 0, 0, W, H);
 
-        const item=document.createElement("div");
-        item.className="thumb";
-        item.appendChild(c);
-        const actions=document.createElement("div"); actions.className="actions";
-        const btn=document.createElement("button"); btn.className="pill"; btn.textContent="Скачать PNG";
-        btn.addEventListener("click",()=>{
-          const a=document.createElement('a');
-          a.href=c.toDataURL("image/png");
-          a.download=`result_${String(i+1).padStart(2,'0')}.png`;
-          a.click();
-        });
-        actions.appendChild(btn);
-        item.appendChild(actions);
-        results.appendChild(item);
+          const item=document.createElement("div"); item.className="thumb"; item.appendChild(c);
+          const actions=document.createElement("div"); actions.className="actions";
+          const btn=document.createElement("button"); btn.className="pill"; btn.textContent="Скачать PNG";
+          btn.addEventListener("click",()=>{ const a=document.createElement('a'); a.href=c.toDataURL('image/png'); a.download=`result_${String(i+1).padStart(2,'0')}.png`; a.click(); });
+          actions.appendChild(btn); item.appendChild(actions); results.appendChild(item);
+        }
+      }catch(err){
+        console.error(err);
+        alert('Ошибка: '+ (err && err.message ? err.message : err));
       }
     }
 
-    renderBtn.addEventListener("click", render);
-    $("downloadAll").addEventListener("click", ()=>{
-      const btns = results.querySelectorAll(".pill");
-      if(btns.length===0){ alert("Сначала собери превью"); return; }
+    document.getElementById('renderBtn')?.addEventListener('click', ()=>{ render(); });
+    document.getElementById('downloadAll')?.addEventListener('click', ()=>{
+      const btns = results.querySelectorAll('.pill');
+      if(btns.length===0){ alert('Сначала собери превью'); return; }
       btns.forEach((b,idx)=> setTimeout(()=>b.click(), idx*150));
     });
   </script>
