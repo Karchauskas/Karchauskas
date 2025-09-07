@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Text & PNG Overlay Maker</title>
+  <style>
+    :root{--bg:#0b0f14;--panel:rgba(255,255,255,.06);--stroke:rgba(255,255,255,.15);--text:#e8eef6}
+    *{box-sizing:border-box}
+    body{margin:0;background:radial-gradient(1200px 800px at 20% -10%,#17202a 0%,transparent 60%),
+                   radial-gradient(1000px 600px at 120% 20%,#111b26 0%,transparent 60%),
+                   var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial}
+    h1{font-size:18px;margin:0 0 8px 0}
+    .wrap{display:grid;grid-template-columns:380px 1fr;gap:16px;min-height:100vh;padding:16px}
+    .card{backdrop-filter:saturate(1.2) blur(8px);background:var(--panel);border:1px solid var(--stroke);border-radius:16px;padding:14px}
+    label{display:block;font-size:12px;color:#b8c4d4;margin:8px 0 6px}
+    input[type="file"],select,textarea,input[type="number"],input[type="text"],button{width:100%}
+    textarea{min-height:140px;resize:vertical;border-radius:10px;border:1px solid var(--stroke);background:rgba(255,255,255,.03);color:var(--text);padding:10px}
+    input,select{border-radius:10px;border:1px solid var(--stroke);background:rgba(255,255,255,.03);color:var(--text);padding:8px}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+    .controls{display:grid;gap:8px}
+    .btn{cursor:pointer;border-radius:12px;border:1px solid var(--stroke);background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.03));padding:10px;font-weight:600;color:var(--text)}
+    .btn:hover{background:linear-gradient(180deg,rgba(255,255,255,.12),rgba(255,255,255,.05))}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+    .thumb{position:relative;border:1px solid var(--stroke);border-radius:12px;overflow:hidden;background:#0b0f14}
+    .thumb canvas{display:block;width:100%;height:auto}
+    .thumb .actions{position:absolute;inset:auto 8px 8px 8px;display:flex;gap:8px}
+    .pill{font-size:12px;padding:6px 10px;border-radius:999px;border:1px solid var(--stroke);background:rgba(0,0,0,.4);cursor:pointer}
+    .drag{border:1px dashed var(--stroke);border-radius:12px;padding:16px;text-align:center;color:#9fb0c6}
+    .hr{height:1px;background:var(--stroke);margin:10px 0}
+    .note{font-size:12px;color:#9fb0c6}
+    .inline{display:flex;gap:8px;align-items:center}
+    .inline input[type="checkbox"]{width:auto}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Наложение текста и PNG‑подложки</h1>
+      <div class="controls">
+        <div class="drag" id="dropZone">Перетащи PNG‑подложку или нажми ниже</div>
+        <input id="overlayInput" type="file" accept="image/png" />
+        <label>Фотографии (можно несколько, порядок важен)</label>
+        <input id="imagesInput" type="file" accept="image/*" multiple />
+        <label>Текст для подписей — один общий блок. Пустая строка = новый абзац → подпись для следующей картинки</label>
+        <textarea id="captions" placeholder="Абзац 1\n\nАбзац 2\n\nАбзац 3 ..."></textarea>
+        <div class="row">
+          <div>
+            <label>Шрифт</label>
+            <select id="fontFamily">
+              <option value="Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica Neue, Arial">Inter / system</option>
+              <option value="Georgia, serif">Georgia</option>
+              <option value="Times New Roman, Times, serif">Times</option>
+              <option value="Courier New, ui-monospace, SFMono-Regular, Menlo, monospace">Monospace</option>
+            </select>
+          </div>
+          <div class="row">
+            <div>
+              <label>Размер, px</label>
+              <input id="fontSize" type="number" min="8" max="256" value="40" />
+            </div>
+            <div>
+              <label>Межстрочный, %</label>
+              <input id="lineHeight" type="number" min="80" max="200" value="120" />
+            </div>
+          </div>
+        </div>
+        <div class="row3">
+          <div>
+            <label>Цвет текста</label>
+            <input id="fontColor" type="text" value="#ffffff" />
+          </div>
+          <div>
+            <label>Контур (stroke), px</label>
+            <input id="strokeWidth" type="number" min="0" max="10" value="2" />
+          </div>
+          <div>
+            <label>Цвет контура</label>
+            <input id="strokeColor" type="text" value="#000000" />
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label>Выравнивание</label>
+            <select id="textAlign">
+              <option value="center">По центру</option>
+              <option value="left">Слева</option>
+              <option value="right">Справа</option>
+            </select>
+          </div>
+          <div>
+            <label>Поля (внутр.), px</label>
+            <input id="padding" type="number" min="0" max="400" value="60" />
+          </div>
+        </div>
+        <div class="row">
+          <div class="inline">
+            <input id="placeTop" type="checkbox" />
+            <label for="placeTop">Размещать текст сверху (снизу — если выключено)</label>
+          </div>
+          <div class="inline">
+            <input id="shadow" type="checkbox" checked />
+            <label for="shadow">Лёгкая тень текста</label>
+          </div>
+        </div>
+        <div class="row">
+          <button class="btn" id="renderBtn">Собрать превью</button>
+          <button class="btn" id="downloadAll">Скачать все</button>
+        </div>
+        <div class="note">Если подложка загружена, размер результата = размеру подложки. Если нет — берём размер первой фотографии.</div>
+        <div class="hr"></div>
+        <div class="note">Подписи сопоставляются по порядку: абзац 1 → фото 1, абзац 2 → фото 2 и т.д. Если абзацев меньше, оставшиеся фото будут без текста.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h1>Результаты</h1>
+      <div id="results" class="grid"></div>
+    </div>
+  </div>
+
+  <script>
+    // Helpers
+    const $ = (id)=>document.getElementById(id);
+    const overlayInput = $("overlayInput");
+    const imagesInput  = $("imagesInput");
+    const captionsEl   = $("captions");
+    const fontFamily   = $("fontFamily");
+    const fontSize     = $("fontSize");
+    const lineHeight   = $("lineHeight");
+    const fontColor    = $("fontColor");
+    const strokeWidth  = $("strokeWidth");
+    const strokeColor  = $("strokeColor");
+    const textAlign    = $("textAlign");
+    const padding      = $("padding");
+    const placeTop     = $("placeTop");
+    const shadow       = $("shadow");
+    const renderBtn    = $("renderBtn");
+    const results      = $("results");
+
+    // Drag & drop for overlay
+    const dropZone = $("dropZone");
+    ;["dragenter","dragover"].forEach(evt=>dropZone.addEventListener(evt,(e)=>{e.preventDefault();dropZone.style.borderColor="#5aa2ff"}))
+    ;["dragleave","drop"].forEach(evt=>dropZone.addEventListener(evt,(e)=>{e.preventDefault();dropZone.style.borderColor="var(--stroke)"}))
+    dropZone.addEventListener("drop",(e)=>{
+      const file = e.dataTransfer.files?.[0];
+      if(file && file.type.includes("png")){
+        const dt = new DataTransfer(); dt.items.add(file); overlayInput.files = dt.files;
+      }
+    });
+
+    function loadImage(file){
+      return new Promise((resolve,reject)=>{
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = ()=>{URL.revokeObjectURL(url); resolve(img)};
+        img.onerror = reject;
+        img.src = url;
+      });
+    }
+
+    function wrapText(ctx, text, maxWidth, lineH){
+      const words = text.split(/\s+/);
+      const lines=[]; let line="";
+      for(const w of words){
+        const test = line ? line+" "+w : w;
+        const {width} = ctx.measureText(test);
+        if(width > maxWidth && line){
+          lines.push(line); line = w;
+        } else { line = test; }
+      }
+      if(line) lines.push(line);
+      return lines;
+    }
+
+    function drawMultiline(ctx, lines, x, y, align, strokeW, strokeCol, fillCol, shadowOn){
+      ctx.textAlign = align; ctx.textBaseline = "top";
+      if(shadowOn){ ctx.shadowColor = "rgba(0,0,0,.6)"; ctx.shadowBlur = 6; ctx.shadowOffsetY = 2; } else { ctx.shadowBlur=0; ctx.shadowOffsetY=0; }
+      for(let i=0;i<lines.length;i++){
+        const ly = y + i * parseFloat(lineHeight.value)/100 * parseInt(fontSize.value,10);
+        if(strokeW>0){ ctx.lineWidth=strokeW; ctx.strokeStyle=strokeCol; ctx.strokeText(lines[i], x, ly); }
+        ctx.fillStyle = fillCol; ctx.fillText(lines[i], x, ly);
+      }
+    }
+
+    async function render(){
+      results.innerHTML = "";
+      const files = Array.from(imagesInput.files||[]);
+      if(files.length===0){ alert("Добавь хотя бы одну фотографию"); return; }
+
+      let overlayImg = null;
+      if(overlayInput.files && overlayInput.files[0]){
+        overlayImg = await loadImage(overlayInput.files[0]);
+      }
+
+      const captions = captionsEl.value
+        .split(/\n\s*\n/g)  // пустая строка — новый абзац
+        .map(s=>s.trim())
+        .filter(Boolean);
+
+      for(let i=0;i<files.length;i++){
+        const photo = await loadImage(files[i]);
+        const W = overlayImg? overlayImg.naturalWidth : photo.naturalWidth;
+        const H = overlayImg? overlayImg.naturalHeight: photo.naturalHeight;
+
+        // создаём канвас нужного размера
+        const c = document.createElement("canvas");
+        c.width = W; c.height = H;
+        const ctx = c.getContext("2d");
+
+        // сначала — фото, подгоняем по размеру канваса, сохраняя пропорции и заполняя (cover)
+        const scale = Math.max(W/photo.naturalWidth, H/photo.naturalHeight);
+        const drawW = photo.naturalWidth*scale;
+        const drawH = photo.naturalHeight*scale;
+        const dx = (W - drawW)/2;
+        const dy = (H - drawH)/2;
+        ctx.drawImage(photo, dx, dy, drawW, drawH);
+
+        // затем — текст
+        ctx.font = `${parseInt(fontSize.value,10)}px ${fontFamily.value}`;
+        const maxW = W - 2*parseInt(padding.value,10);
+        const lines = captions[i] ? wrapText(ctx, captions[i], maxW, parseInt(lineHeight.value,10)) : [];
+        let x = parseInt(padding.value,10);
+        if(textAlign.value==="center") x = W/2;
+        if(textAlign.value==="right")  x = W - parseInt(padding.value,10);
+        const y = placeTop.checked ? parseInt(padding.value,10) : (H - parseInt(padding.value,10) - lines.length * (parseFloat(lineHeight.value)/100 * parseInt(fontSize.value,10)));
+        drawMultiline(ctx, lines, x, y, textAlign.value, parseInt(strokeWidth.value,10), strokeColor.value, fontColor.value, shadow.checked);
+
+        // сверху — PNG‑подложка, если есть
+        if(overlayImg){ ctx.drawImage(overlayImg, 0, 0, W, H); }
+
+        // превью + кнопки
+        const item = document.createElement("div");
+        item.className = "thumb";
+        item.appendChild(c);
+        const actions = document.createElement("div");
+        actions.className = "actions";
+        const btn = document.createElement("button");
+        btn.className = "pill";
+        btn.textContent = "Скачать PNG";
+        btn.addEventListener("click",()=>{
+          const a = document.createElement('a');
+          a.href = c.toDataURL("image/png");
+          a.download = `result_${String(i+1).padStart(2,'0')}.png`;
+          a.click();
+        });
+        actions.appendChild(btn);
+        item.appendChild(actions);
+        results.appendChild(item);
+      }
+    }
+
+    renderBtn.addEventListener("click", render);
+
+    // Скачать все (просто триггерим клики по кнопкам)
+    $("downloadAll").addEventListener("click", ()=>{
+      const btns = results.querySelectorAll(".pill");
+      if(btns.length===0){ alert("Сначала собери превью"); return; }
+      btns.forEach((b,idx)=> setTimeout(()=>b.click(), idx*150));
+    });
+  </script>
+</body>
+</html>
