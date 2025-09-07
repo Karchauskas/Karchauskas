@@ -5,6 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Text & PNG Overlay Maker</title>
   <style>
+    @font-face {
+      font-family: 'Aeroport';
+      src: url('Aeroport-Bold.ttf') format('truetype');
+      font-weight: bold;
+      font-style: normal;
+    }
     :root{--bg:#0b0f14;--panel:rgba(255,255,255,.06);--stroke:rgba(255,255,255,.15);--text:#e8eef6}
     *{box-sizing:border-box}
     body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial}
@@ -41,13 +47,8 @@
 
         <div class="row">
           <div>
-            <label>Шрифт</label>
-            <select id="fontFamily">
-              <option value="Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica Neue, Arial">Inter / system</option>
-              <option value="Georgia, serif">Georgia</option>
-              <option value="Times New Roman, Times, serif">Times</option>
-              <option value="Courier New, ui-monospace, SFMono-Regular, Menlo, monospace">Monospace</option>
-            </select>
+            <label>Шрифт (фиксирован Aeroport Bold)</label>
+            <input type="text" value="Aeroport Bold" disabled />
           </div>
           <div class="row">
             <div>
@@ -121,7 +122,6 @@
     const $ = (id)=>document.getElementById(id);
     const imagesInput  = $("imagesInput");
     const captionsEl   = $("captions");
-    const fontFamily   = $("fontFamily");
     const fontSize     = $("fontSize");
     const lineHeight   = $("lineHeight");
     const fontColor    = $("fontColor");
@@ -212,7 +212,8 @@
 
           if(overlayImg) ctx.drawImage(overlayImg, 0, 0, W, H);
 
-          ctx.font = `${parseInt(fontSize.value,10)}px ${fontFamily.value}`;
+          ctx.font = `${parseInt(fontSize.value,10)}px Aeroport, sans-serif`;
+          ctx.font = `bold ${parseInt(fontSize.value,10)}px Aeroport, sans-serif`;
           const maxW = Math.round(W * (parseInt(textWidthPct.value||88,10)/100));
           const lines = captions[i] ? wrapText(ctx, captions[i], maxW) : [];
 
@@ -227,7 +228,6 @@
           const bottomLimit = H - parseInt(safeBottom.value||0,10);
           const y = Math.max(pad, bottomLimit - textBlockH - 4);
 
-          // ВАЖНО: текст рисуем ПОСЛЕ подложки, чтобы он был сверху
           drawMultiline(ctx, lines, x, y);
 
           const item=document.createElement("div");
