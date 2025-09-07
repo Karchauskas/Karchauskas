@@ -7,9 +7,7 @@
   <style>
     :root{--bg:#0b0f14;--panel:rgba(255,255,255,.06);--stroke:rgba(255,255,255,.15);--text:#e8eef6}
     *{box-sizing:border-box}
-    body{margin:0;background:radial-gradient(1200px 800px at 20% -10%,#17202a 0%,transparent 60%),
-                   radial-gradient(1000px 600px at 120% 20%,#111b26 0%,transparent 60%),
-                   var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial}
+    body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial}
     h1{font-size:18px;margin:0 0 8px 0}
     .wrap{display:grid;grid-template-columns:380px 1fr;gap:16px;min-height:100vh;padding:16px}
     .card{backdrop-filter:saturate(1.2) blur(8px);background:var(--panel);border:1px solid var(--stroke);border-radius:16px;padding:14px}
@@ -27,8 +25,6 @@
     .thumb canvas{display:block;width:100%;height:auto}
     .thumb .actions{position:absolute;inset:auto 8px 8px 8px;display:flex;gap:8px}
     .pill{font-size:12px;padding:6px 10px;border-radius:999px;border:1px solid var(--stroke);background:rgba(0,0,0,.4);cursor:pointer}
-    .drag{border:1px dashed var(--stroke);border-radius:12px;padding:16px;text-align:center;color:#9fb0c6}
-    .hr{height:1px;background:var(--stroke);margin:10px 0}
     .note{font-size:12px;color:#9fb0c6}
     .inline{display:flex;gap:8px;align-items:center}
     .inline input[type="checkbox"]{width:auto}
@@ -37,14 +33,14 @@
 <body>
   <div class="wrap">
     <div class="card">
-      <h1>Наложение текста и PNG‑подложки</h1>
+      <h1>Наложение текста на фото</h1>
       <div class="controls">
-        <div class="drag" id="dropZone">Перетащи PNG‑подложку или нажми ниже (по умолчанию загружается <code>overlay.png<\/code> из корня сайта)</div>
-        <input id="overlayInput" type="file" accept="image/png" />
         <label>Фотографии (можно несколько, порядок важен)</label>
         <input id="imagesInput" type="file" accept="image/*" multiple />
-        <label>Текст для подписей — один общий блок. Пустая строка = новый абзац → подпись для следующей картинки</label>
-        <textarea id="captions" placeholder="Абзац 1\n\nАбзац 2\n\nАбзац 3 ..."></textarea>
+
+        <label>Текст для подписей — общий блок. Пустая строка = новый абзац → подпись для следующей картинки</label>
+        <textarea id="captions" placeholder="Абзац 1&#10;&#10;Абзац 2&#10;&#10;Абзац 3 ..."></textarea>
+
         <div class="row">
           <div>
             <label>Шрифт</label>
@@ -66,6 +62,7 @@
             </div>
           </div>
         </div>
+
         <div class="row3">
           <div>
             <label>Цвет текста</label>
@@ -80,6 +77,7 @@
             <input id="strokeColor" type="text" value="#000000" />
           </div>
         </div>
+
         <div class="row">
           <div>
             <label>Выравнивание</label>
@@ -94,33 +92,32 @@
             <input id="padding" type="number" min="0" max="400" value="60" />
           </div>
         </div>
+
         <div class="row">
-          <div class="inline">
-            <input id="placeTop" type="checkbox" />
-            <label for="placeTop">Размещать текст сверху (если выключено — внизу, над линией)</label>
-          </div>
           <div class="inline">
             <input id="shadow" type="checkbox" checked />
             <label for="shadow">Лёгкая тень текста</label>
           </div>
-        </div>
-        <div class="row">
           <div>
-            <label>Безопасная зона снизу (px) — текст будет выше этой границы</label>
+            <label>Безопасная зона снизу, px (текст выше линии)</label>
             <input id="safeBottom" type="number" min="0" max="600" value="170" />
           </div>
+        </div>
+
+        <div class="row">
           <div>
-            <label>Ширина области текста, % от холста</label>
+            <label>Ширина области текста, % от ширины холста</label>
             <input id="textWidthPct" type="number" min="40" max="100" value="88" />
           </div>
+          <div></div>
         </div>
+
         <div class="row">
           <button class="btn" id="renderBtn">Собрать превью</button>
           <button class="btn" id="downloadAll">Скачать все</button>
         </div>
-        <div class="note">Если подложка загружена (или найден <code>overlay.png<\/code>), размер результата = размеру подложки. Если нет — берём размер первой фотографии.</div>
-        <div class="hr"></div>
-        <div class="note">Подписи сопоставляются по порядку: абзац 1 → фото 1, абзац 2 → фото 2 и т.д. Если абзацев меньше, оставшиеся фото будут без текста.</div>
+
+        <div class="note">Подложка берётся из файла <code>Backgroung.png</code> (лежит рядом с этим HTML). Если нужно другое имя — скажи.</div>
       </div>
     </div>
 
@@ -131,9 +128,7 @@
   </div>
 
   <script>
-    // Helpers
     const $ = (id)=>document.getElementById(id);
-    const overlayInput = $("overlayInput");
     const imagesInput  = $("imagesInput");
     const captionsEl   = $("captions");
     const fontFamily   = $("fontFamily");
@@ -144,130 +139,125 @@
     const strokeColor  = $("strokeColor");
     const textAlign    = $("textAlign");
     const padding      = $("padding");
-    const placeTop     = $("placeTop");
     const shadow       = $("shadow");
-    const renderBtn    = $("renderBtn");
-    const results      = $("results");
     const safeBottom   = $("safeBottom");
     const textWidthPct = $("textWidthPct");
+    const renderBtn    = $("renderBtn");
+    const results      = $("results");
 
-    // Drag & drop for overlay
-    const dropZone = $("dropZone");
-    ;["dragenter","dragover"].forEach(evt=>dropZone.addEventListener(evt,(e)=>{e.preventDefault();dropZone.style.borderColor="#5aa2ff"}))
-    ;["dragleave","drop"].forEach(evt=>dropZone.addEventListener(evt,(e)=>{e.preventDefault();dropZone.style.borderColor="var(--stroke)"}))
-    dropZone.addEventListener("drop",(e)=>{
-      const file = e.dataTransfer.files?.[0];
-      if(file && file.type.includes("png")){
-        const dt = new DataTransfer(); dt.items.add(file); overlayInput.files = dt.files;
-      }
-    });
-
-    // Try to preload overlay.png from root automatically
-    let preloadedOverlay = null;
-    (async()=>{
-      try{
-        const resp = await fetch('overlay.png', {cache:'no-store'});
-        if(resp.ok){
-          const blob = await resp.blob();
-          const file = new File([blob], 'overlay.png', {type: 'image/png'});
-          const dt = new DataTransfer(); dt.items.add(file); overlayInput.files = dt.files;
-        }
-      }catch(_){}
-    })();
-
-    function loadImage(file){
+    function loadImage(src){
       return new Promise((resolve,reject)=>{
-        const url = URL.createObjectURL(file);
         const img = new Image();
-        img.onload = ()=>{URL.revokeObjectURL(url); resolve(img)};
-        img.onerror = reject;
-        img.src = url;
+        img.onload=()=>resolve(img);
+        img.onerror=reject;
+        img.src=src;
       });
     }
 
-    function wrapText(ctx, text, maxWidth, lineH){
+    function loadImageFromFile(file){
+      return new Promise((resolve,reject)=>{
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload=()=>{ URL.revokeObjectURL(url); resolve(img); };
+        img.onerror=reject;
+        img.src=url;
+      });
+    }
+
+    function wrapText(ctx, text, maxWidth){
       const words = text.split(/\s+/);
       const lines=[]; let line="";
       for(const w of words){
-        const test = line ? line+" "+w : w;
-        const {width} = ctx.measureText(test);
-        if(width > maxWidth && line){
-          lines.push(line); line = w;
-        } else { line = test; }
+        const test=line?line+" "+w:w;
+        if(ctx.measureText(test).width>maxWidth && line){ lines.push(line); line=w; }
+        else { line=test; }
       }
       if(line) lines.push(line);
       return lines;
     }
 
-    function drawMultiline(ctx, lines, x, y, align, strokeW, strokeCol, fillCol, shadowOn){
-      ctx.textAlign = align; ctx.textBaseline = "top";
-      if(shadowOn){ ctx.shadowColor = "rgba(0,0,0,.6)"; ctx.shadowBlur = 6; ctx.shadowOffsetY = 2; } else { ctx.shadowBlur=0; ctx.shadowOffsetY=0; }
+    function drawMultiline(ctx, lines, x, y){
+      ctx.textAlign = textAlign.value;
+      ctx.textBaseline = "top";
+      if(shadow.checked){ ctx.shadowColor="rgba(0,0,0,.6)"; ctx.shadowBlur=6; ctx.shadowOffsetY=2; }
+      else { ctx.shadowBlur=0; ctx.shadowOffsetY=0; }
+      const step = (parseFloat(lineHeight.value)/100 * parseInt(fontSize.value,10));
       for(let i=0;i<lines.length;i++){
-        const ly = y + i * parseFloat(lineHeight.value)/100 * parseInt(fontSize.value,10);
-        if(strokeW>0){ ctx.lineWidth=strokeW; ctx.strokeStyle=strokeCol; ctx.strokeText(lines[i], x, ly); }
-        ctx.fillStyle = fillCol; ctx.fillText(lines[i], x, ly);
+        const ly = y + i * step;
+        if(parseInt(strokeWidth.value,10)>0){
+          ctx.lineWidth=parseInt(strokeWidth.value,10);
+          ctx.strokeStyle=strokeColor.value;
+          ctx.strokeText(lines[i], x, ly);
+        }
+        ctx.fillStyle=fontColor.value;
+        ctx.fillText(lines[i], x, ly);
       }
     }
 
     async function render(){
-      results.innerHTML = "";
+      results.innerHTML="";
       const files = Array.from(imagesInput.files||[]);
       if(files.length===0){ alert("Добавь хотя бы одну фотографию"); return; }
 
-      let overlayImg = null;
-      if(overlayInput.files && overlayInput.files[0]){
-        overlayImg = await loadImage(overlayInput.files[0]);
-      }
+      // Загружаем PNG-подложку
+      const overlayImg = await loadImage("Backgroung.png");
 
       const captions = captionsEl.value
-        .split(/\n\s*\n/g)  // пустая строка — новый абзац
+        .split(/\n\s*\n/g)
         .map(s=>s.trim())
         .filter(Boolean);
 
       for(let i=0;i<files.length;i++){
-        const photo = await loadImage(files[i]);
-        const W = overlayImg? overlayImg.naturalWidth : photo.naturalWidth;
-        const H = overlayImg? overlayImg.naturalHeight: photo.naturalHeight;
+        const photo = await loadImageFromFile(files[i]);
+        const W = overlayImg.naturalWidth;
+        const H = overlayImg.naturalHeight;
 
-        // создаём канвас нужного размера
         const c = document.createElement("canvas");
-        c.width = W; c.height = H;
+        c.width=W; c.height=H;
         const ctx = c.getContext("2d");
 
-        // сначала — фото, подгоняем по размеру канваса, сохраняя пропорции и заполняя (cover)
+        // Рендер фото как cover
         const scale = Math.max(W/photo.naturalWidth, H/photo.naturalHeight);
         const drawW = photo.naturalWidth*scale;
         const drawH = photo.naturalHeight*scale;
-        const dx = (W - drawW)/2;
-        const dy = (H - drawH)/2;
+        const dx = (W-drawW)/2;
+        const dy = (H-drawH)/2;
         ctx.drawImage(photo, dx, dy, drawW, drawH);
 
-        // затем — текст
+        // Текст
         ctx.font = `${parseInt(fontSize.value,10)}px ${fontFamily.value}`;
-        const maxW = Math.round(W * (parseInt(textWidthPct.value,10)/100));
-        const lines = captions[i] ? wrapText(ctx, captions[i], maxW, parseInt(lineHeight.value,10)) : [];
-        let x = parseInt(padding.value,10);
+        const maxW = Math.round(W * (parseInt(textWidthPct.value||88,10)/100));
+        const lines = captions[i] ? wrapText(ctx, captions[i], maxW) : [];
+
+        const textAreaLeft = (W - maxW)/2;
+        const pad = parseInt(padding.value,10);
+        let x = textAreaLeft + pad;
         if(textAlign.value==="center") x = W/2;
-        if(textAlign.value==="right")  x = W - parseInt(padding.value,10);
-        const y = placeTop.checked ? parseInt(padding.value,10) : (H - parseInt(padding.value,10) - lines.length * (parseFloat(lineHeight.value)/100 * parseInt(fontSize.value,10)));
-        drawMultiline(ctx, lines, x, y, textAlign.value, parseInt(strokeWidth.value,10), strokeColor.value, fontColor.value, shadow.checked);
+        if(textAlign.value==="right")  x = W - textAreaLeft - pad;
 
-        // сверху — PNG‑подложка, если есть
-        if(overlayImg){ ctx.drawImage(overlayImg, 0, 0, W, H); }
+        const step = (parseFloat(lineHeight.value)/100 * parseInt(fontSize.value,10));
+        const textBlockH = lines.length * step;
+        const bottomLimit = H - parseInt(safeBottom.value||0,10); // нижняя граница (над линией)
+        const y = Math.max(pad, bottomLimit - textBlockH - 4);
 
-        // превью + кнопки
-        const item = document.createElement("div");
-        item.className = "thumb";
+        drawMultiline(ctx, lines, x, y);
+
+        // Подложка сверху
+        ctx.drawImage(overlayImg, 0, 0, W, H);
+
+        // Превью + скачивание
+        const item=document.createElement("div");
+        item.className="thumb";
         item.appendChild(c);
-        const actions = document.createElement("div");
-        actions.className = "actions";
-        const btn = document.createElement("button");
-        btn.className = "pill";
-        btn.textContent = "Скачать PNG";
+        const actions=document.createElement("div");
+        actions.className="actions";
+        const btn=document.createElement("button");
+        btn.className="pill";
+        btn.textContent="Скачать PNG";
         btn.addEventListener("click",()=>{
-          const a = document.createElement('a');
-          a.href = c.toDataURL("image/png");
-          a.download = `result_${String(i+1).padStart(2,'0')}.png`;
+          const a=document.createElement('a');
+          a.href=c.toDataURL("image/png");
+          a.download=`result_${String(i+1).padStart(2,'0')}.png`;
           a.click();
         });
         actions.appendChild(btn);
@@ -276,9 +266,7 @@
       }
     }
 
-    renderBtn.addEventListener("click", render);
-
-    // Скачать все (просто триггерим клики по кнопкам)
+    $("renderBtn").addEventListener("click", render);
     $("downloadAll").addEventListener("click", ()=>{
       const btns = results.querySelectorAll(".pill");
       if(btns.length===0){ alert("Сначала собери превью"); return; }
