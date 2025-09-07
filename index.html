@@ -26,6 +26,8 @@
     .thumb .actions{position:absolute;inset:auto 8px 8px 8px;display:flex;gap:8px}
     .pill{font-size:12px;padding:6px 10px;border-radius:999px;border:1px solid var(--stroke);background:rgba(0,0,0,.4);cursor:pointer}
     .note{font-size:12px;color:#9fb0c6}
+    .inline{display:flex;gap:8px;align-items:center}
+    .inline input[type="checkbox"]{width:auto}
   </style>
 </head>
 <body>
@@ -92,12 +94,24 @@
         </div>
 
         <div class="row">
+          <div class="inline">
+            <input id="shadow" type="checkbox" checked />
+            <label for="shadow">Лёгкая тень текста</label>
+          </div>
+          <div class="inline">
+            <label style="margin:0 8px 0 0;">Подложка:</label>
+            <span id="overlayStatus" class="note">ищем…</span>
+            <input id="overlayFile" type="file" accept="image/png" style="width:auto;margin-left:8px;" />
+          </div>
+        </div>
+
+        <div class="row">
           <div>
-            <label>Безопасная зона снизу, px (текст выше линии)</label>
+            <label>Безопасная зона снизу, px</label>
             <input id="safeBottom" type="number" min="0" max="1000" value="170" />
           </div>
           <div>
-            <label>Ширина области текста, % от ширины холста</label>
+            <label>Ширина области текста, %</label>
             <input id="textWidthPct" type="number" min="40" max="100" value="88" />
           </div>
         </div>
@@ -107,7 +121,7 @@
           <button class="btn" id="downloadAll">Скачать все</button>
         </div>
 
-        <div id="overlayStatus" class="note">Подложка: ищем…</div>
+        <div class="note">Автопоиск имён подложки: <code>overlay.png</code> / <code>Backgroung.png</code> (рядом с этим HTML).</div>
       </div>
     </div>
 
@@ -118,6 +132,7 @@
   </div>
 
   <script>
+    // ---------- helpers ----------
     const $ = (id)=>document.getElementById(id);
     const imagesInput  = $("imagesInput");
     const captionsEl   = $("captions");
@@ -129,12 +144,22 @@
     const strokeColor  = $("strokeColor");
     const textAlign    = $("textAlign");
     const padding      = $("padding");
+    const shadow       = $("shadow");
     const safeBottom   = $("safeBottom");
     const textWidthPct = $("textWidthPct");
     const results      = $("results");
     const overlayStatus= $("overlayStatus");
+    const overlayFile  = $("overlayFile");
 
-    // --- utils ---
+    function imgFromBlob(blob){
+      return new Promise((resolve,reject)=>{
+        const url = URL.createObjectURL(blob);
+        const img = new Image();
+        img.onload=()=>{ URL.revokeObjectURL(url); resolve(img); };
+        img.onerror=(e)=>{ URL.revokeObjectURL(url); reject(e); };
+        img.src = url;
+      });
+    }
     function loadImageFromFile(file){
       return new Promise((resolve,reject)=>{
         const url = URL.createObjectURL(file);
@@ -144,7 +169,6 @@
         img.src=url;
       });
     }
-
     function wrapText(ctx, text, maxWidth){
       const words = text.split(/\s+/);
       const lines=[]; let line="";
@@ -156,10 +180,11 @@
       if(line) lines.push(line);
       return lines;
     }
-
     function drawMultiline(ctx, lines, x, y){
       ctx.textAlign = textAlign.value;
       ctx.textBaseline = "top";
+      if(shadow.checked){ ctx.shadowColor="rgba(0,0,0,.6)"; ctx.shadowBlur=6; ctx.shadowOffsetY=2; }
+      else { ctx.shadowBlur=0; ctx.shadowOffsetY=0; }
       const step = (parseFloat(lineHeight.value)/100 * parseInt(fontSize.value,10));
       for(let i=0;i<lines.length;i++){
         const ly = y + i * step;
@@ -173,84 +198,93 @@
       }
     }
 
-    // Надёжная загрузка подложки без fetch: по очереди пробуем имена
-    function loadOverlaySequential(names){
-      return new Promise((resolve)=>{
-        let idx = 0;
-        const tryNext = ()=>{
-          if(idx>=names.length) return resolve({img:null,name:null});
-          const img = new Image();
-          img.onload = ()=> resolve({img,name:names[idx]});
-          img.onerror = ()=> { idx++; tryNext(); };
-          img.src = names[idx] + "?v=" + Date.now(); // анти-кэш
-        };
-        tryNext();
-      });
+    // ---------- overlay handling ----------
+    let overlayImg = null;
+    async function autoFindOverlay(){
+      const names = ["overlay.png","Overlay.png","Backgroung.png","background.png","Background.png"];
+      for(const n of names){
+        try{
+          const resp = await fetch(n+"?v="+Date.now(), {cache:"no-store"});
+          if(resp.ok){
+            const blob = await resp.blob();
+            overlayImg = await imgFromBlob(blob);
+            overlayStatus.textContent = "найдена ("+n+")";
+            return;
+          }
+        }catch(e){}
+      }
+      overlayStatus.textContent = "не найдена — можно выбрать файл";
+      overlayImg = null;
     }
-
-    async function render(){
+    overlayFile.addEventListener("change", async (e)=>{
+      const f = e.target.files && e.target.files[0];
+      if(!f) return;
       try{
-        results.innerHTML="";
-        const files = Array.from(imagesInput.files||[]);
-        if(files.length===0){ alert("Добавь хотя бы одну фотографию"); return; }
+        overlayImg = await loadImageFromFile(f);
+        overlayStatus.textContent = "подгружена вручную ("+ (f.name||"") +")";
+      }catch(e){
+        overlayStatus.textContent = "ошибка загрузки подложки";
+        overlayImg = null;
+      }
+    });
+    // стартовый автопоиск при загрузке страницы
+    autoFindOverlay();
 
-        const {img:overlayImg,name:overlayName} = await loadOverlaySequential(["Backgroung.png","overlay.png","Overlay.png","background.png","Background.png"]);
-        overlayStatus.textContent = overlayImg ? `Подложка: найдена (${overlayName})` : "Подложка: не найдена (рендер без неё)";
+    // ---------- render ----------
+    async function render(){
+      results.innerHTML="";
+      const files = Array.from(imagesInput.files||[]);
+      if(files.length===0){ alert("Добавь хотя бы одну фотографию"); return; }
 
-        const captions = captionsEl.value.split(/\n\s*\n/g).map(s=>s.trim());
+      const captions = captionsEl.value.split(/\n\s*\n/g).map(s=>s.trim());
 
-        for(let i=0;i<files.length;i++){
-          const photo = await loadImageFromFile(files[i]);
-          const W = overlayImg? overlayImg.naturalWidth  : photo.naturalWidth;
-          const H = overlayImg? overlayImg.naturalHeight : photo.naturalHeight;
+      for(let i=0;i<files.length;i++){
+        const photo = await loadImageFromFile(files[i]);
+        const W = overlayImg? overlayImg.naturalWidth  : photo.naturalWidth;
+        const H = overlayImg? overlayImg.naturalHeight : photo.naturalHeight;
 
-          const c = document.createElement("canvas"); c.width=W; c.height=H;
-          const ctx = c.getContext("2d");
+        const c = document.createElement("canvas"); c.width=W; c.height=H;
+        const ctx = c.getContext("2d");
 
-          // фото как cover
-          const scale = Math.max(W/photo.naturalWidth, H/photo.naturalHeight);
-          const drawW = photo.naturalWidth*scale;
-          const drawH = photo.naturalHeight*scale;
-          const dx = (W-drawW)/2;
-          const dy = (H-drawH)/2;
-          ctx.drawImage(photo, dx, dy, drawW, drawH);
+        // 1) фото (низ)
+        const scale = Math.max(W/photo.naturalWidth, H/photo.naturalHeight);
+        const drawW = photo.naturalWidth*scale;
+        const drawH = photo.naturalHeight*scale;
+        const dx = (W-drawW)/2;
+        const dy = (H-drawH)/2;
+        ctx.drawImage(photo, dx, dy, drawW, drawH);
 
-          // текст
-          ctx.font = `${parseInt(fontSize.value,10)}px ${document.getElementById('fontFamily').value}`;
-          const maxW = Math.round(W * (parseInt(textWidthPct.value||88,10)/100));
-          const lines = (captions[i]||"").trim()? wrapText(ctx, captions[i], maxW) : [];
+        // 2) подложка (середина)
+        if(overlayImg) ctx.drawImage(overlayImg, 0, 0, W, H);
 
-          const areaLeft = (W - maxW)/2;
-          const pad = parseInt(padding.value,10);
-          let x = areaLeft + pad;
-          if(document.getElementById('textAlign').value==="center") x = W/2;
-          if(document.getElementById('textAlign').value==="right")  x = W - areaLeft - pad;
+        // 3) текст (СВЕРХУ ВСЕХ СЛОЁВ)
+        ctx.font = `${parseInt(fontSize.value,10)}px ${fontFamily.value}`;
+        const maxW = Math.round(W * (parseInt(textWidthPct.value||88,10)/100));
+        const text = (captions[i]||"").trim();
+        const lines = text ? wrapText(ctx, text, maxW) : [];
+        const areaLeft = (W - maxW)/2;
+        const pad = parseInt(padding.value,10);
+        let x = areaLeft + pad;
+        if(textAlign.value==="center") x = W/2;
+        if(textAlign.value==="right")  x = W - areaLeft - pad;
+        const step = (parseFloat(lineHeight.value)/100 * parseInt(fontSize.value,10));
+        const blockH = lines.length * step;
+        const bottomLimit = H - parseInt(safeBottom.value||0,10);
+        const y = Math.max(pad, bottomLimit - blockH - 4);
+        drawMultiline(ctx, lines, x, y);
 
-          const step = (parseFloat(lineHeight.value)/100 * parseInt(fontSize.value,10));
-          const blockH = lines.length * step;
-          const bottomLimit = H - parseInt(safeBottom.value||0,10);
-          const y = Math.max(pad, bottomLimit - blockH - 4);
-
-          drawMultiline(ctx, lines, x, y);
-
-          if(overlayImg) ctx.drawImage(overlayImg, 0, 0, W, H);
-
-          const item=document.createElement("div"); item.className="thumb"; item.appendChild(c);
-          const actions=document.createElement("div"); actions.className="actions";
-          const btn=document.createElement("button"); btn.className="pill"; btn.textContent="Скачать PNG";
-          btn.addEventListener("click",()=>{ const a=document.createElement('a'); a.href=c.toDataURL('image/png'); a.download=`result_${String(i+1).padStart(2,'0')}.png`; a.click(); });
-          actions.appendChild(btn); item.appendChild(actions); results.appendChild(item);
-        }
-      }catch(err){
-        console.error(err);
-        alert('Ошибка: '+ (err && err.message ? err.message : err));
+        // превью + скачивание
+        const item=document.createElement("div"); item.className="thumb"; item.appendChild(c);
+        const actions=document.createElement("div"); actions.className="actions";
+        const btn=document.createElement("button"); btn.className="pill"; btn.textContent="Скачать PNG";
+        btn.addEventListener("click",()=>{ const a=document.createElement('a'); a.href=c.toDataURL('image/png'); a.download=`result_${String(i+1).padStart(2,'0')}.png`; a.click(); });
+        actions.appendChild(btn); item.appendChild(actions); results.appendChild(item);
       }
     }
-
-    document.getElementById('renderBtn')?.addEventListener('click', ()=>{ render(); });
-    document.getElementById('downloadAll')?.addEventListener('click', ()=>{
-      const btns = results.querySelectorAll('.pill');
-      if(btns.length===0){ alert('Сначала собери превью'); return; }
+    document.getElementById("renderBtn").addEventListener("click", render);
+    document.getElementById("downloadAll").addEventListener("click", ()=>{
+      const btns = results.querySelectorAll(".pill");
+      if(btns.length===0){ alert("Сначала собери превью"); return; }
       btns.forEach((b,idx)=> setTimeout(()=>b.click(), idx*150));
     });
   </script>
