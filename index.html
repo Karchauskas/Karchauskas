@@ -25,11 +25,7 @@
     .thumb canvas{display:block;width:100%;height:auto}
     .thumb .actions{position:absolute;inset:auto 8px 8px 8px;display:flex;gap:8px}
     .pill{font-size:12px;padding:6px 10px;border-radius:999px;border:1px solid var(--stroke);background:rgba(0,0,0,.4);cursor:pointer}
-    .drag{border:1px dashed var(--stroke);border-radius:12px;padding:16px;text-align:center;color:#9fb0c6}
-    .hr{height:1px;background:var(--stroke);margin:10px 0}
     .note{font-size:12px;color:#9fb0c6}
-    .inline{display:flex;gap:8px;align-items:center}
-    .inline input[type="checkbox"]{width:auto}
   </style>
 </head>
 <body>
@@ -39,8 +35,10 @@
       <div class="controls">
         <label>Фотографии (можно несколько, порядок важен)</label>
         <input id="imagesInput" type="file" accept="image/*" multiple />
-        <label>Текст для подписей — один общий блок. Пустая строка = новый абзац → подпись для следующей картинки</label>
-        <textarea id="captions" placeholder="Абзац 1\n\nАбзац 2\n\nАбзац 3 ..."></textarea>
+
+        <label>Текст для подписей — общий блок. Пустая строка = новый абзац → подпись для следующей картинки</label>
+        <textarea id="captions" placeholder="Абзац 1&#10;&#10;Абзац 2&#10;&#10;Абзац 3 ..."></textarea>
+
         <div class="row">
           <div>
             <label>Шрифт</label>
@@ -62,6 +60,7 @@
             </div>
           </div>
         </div>
+
         <div class="row3">
           <div>
             <label>Цвет текста</label>
@@ -76,6 +75,7 @@
             <input id="strokeColor" type="text" value="#000000" />
           </div>
         </div>
+
         <div class="row">
           <div>
             <label>Выравнивание</label>
@@ -90,28 +90,24 @@
             <input id="padding" type="number" min="0" max="400" value="60" />
           </div>
         </div>
-        <div class="row">
-          <div class="inline">
-            <input id="shadow" type="checkbox" checked />
-            <label for="shadow">Лёгкая тень текста</label>
-          </div>
-          <div></div>
-        </div>
+
         <div class="row">
           <div>
             <label>Безопасная зона снизу, px (текст выше линии)</label>
-            <input id="safeBottom" type="number" min="0" max="600" value="170" />
+            <input id="safeBottom" type="number" min="0" max="1000" value="170" />
           </div>
           <div>
             <label>Ширина области текста, % от ширины холста</label>
             <input id="textWidthPct" type="number" min="40" max="100" value="88" />
           </div>
         </div>
+
         <div class="row">
           <button class="btn" id="renderBtn">Собрать превью</button>
           <button class="btn" id="downloadAll">Скачать все</button>
         </div>
-        <div class="note">Подложка берётся из файла <code>Backgroung.png</code>. Текст ограничивается безопасной зоной снизу и не опускается на линию.</div>
+
+        <div id="overlayStatus" class="note">Подложка: ищем…</div>
       </div>
     </div>
 
@@ -133,90 +129,117 @@
     const strokeColor  = $("strokeColor");
     const textAlign    = $("textAlign");
     const padding      = $("padding");
-    const shadow       = $("shadow");
-    const renderBtn    = $("renderBtn");
-    const results      = $("results");
     const safeBottom   = $("safeBottom");
     const textWidthPct = $("textWidthPct");
+    const renderBtn    = $("renderBtn");
+    const results      = $("results");
+    const overlayStatus= $("overlayStatus");
 
-    async function loadImage(src){
+    function loadImageFromFile(file){
       return new Promise((resolve,reject)=>{
+        const url = URL.createObjectURL(file);
         const img = new Image();
-        img.onload=()=>resolve(img);
+        img.onload=()=>{ URL.revokeObjectURL(url); resolve(img); };
         img.onerror=reject;
-        img.src=src;
+        img.src=url;
       });
     }
 
     function wrapText(ctx, text, maxWidth){
-      const words=text.split(/\s+/);
+      const words = text.split(/\s+/);
       const lines=[]; let line="";
       for(const w of words){
         const test=line?line+" "+w:w;
-        if(ctx.measureText(test).width>maxWidth&&line){lines.push(line);line=w;}else{line=test;}}
-      if(line)lines.push(line);
+        if(ctx.measureText(test).width>maxWidth && line){ lines.push(line); line=w; }
+        else { line=test; }
+      }
+      if(line) lines.push(line);
       return lines;
     }
 
     function drawMultiline(ctx, lines, x, y){
-      ctx.textAlign=textAlign.value;
-      ctx.textBaseline="top";
-      if(shadow.checked){ctx.shadowColor="rgba(0,0,0,.6)";ctx.shadowBlur=6;ctx.shadowOffsetY=2;} else {ctx.shadowBlur=0;ctx.shadowOffsetY=0;}
+      ctx.textAlign = textAlign.value;
+      ctx.textBaseline = "top";
+      if(ctx.shadowBlur){ ctx.shadowBlur=0; ctx.shadowOffsetY=0; }
+      const step = (parseFloat(lineHeight.value)/100 * parseInt(fontSize.value,10));
       for(let i=0;i<lines.length;i++){
-        const ly=y+i*(parseFloat(lineHeight.value)/100*parseInt(fontSize.value,10));
-        if(parseInt(strokeWidth.value,10)>0){ctx.lineWidth=parseInt(strokeWidth.value,10);ctx.strokeStyle=strokeColor.value;ctx.strokeText(lines[i],x,ly);}
-        ctx.fillStyle=fontColor.value;ctx.fillText(lines[i],x,ly);
+        const ly = y + i * step;
+        if(parseInt(strokeWidth.value,10)>0){
+          ctx.lineWidth=parseInt(strokeWidth.value,10);
+          ctx.strokeStyle=strokeColor.value;
+          ctx.strokeText(lines[i], x, ly);
+        }
+        ctx.fillStyle=fontColor.value;
+        ctx.fillText(lines[i], x, ly);
       }
+    }
+
+    async function findOverlay(){
+      const names = ["overlay.png","Overlay.png","Backgroung.png","background.png","Background.png"];
+      for(const n of names){
+        try{
+          const resp = await fetch(n+"?v="+Date.now(), {cache:"no-store"});
+          if(resp.ok){
+            const blob = await resp.blob();
+            const url = URL.createObjectURL(blob);
+            const img = new Image();
+            await new Promise((res,rej)=>{ img.onload=res; img.onerror=rej; img.src=url; });
+            return {img,name:n};
+          }
+        }catch(e){}
+      }
+      return {img:null,name:null};
     }
 
     async function render(){
       results.innerHTML="";
-      const files=Array.from(imagesInput.files||[]);
-      if(files.length===0){alert("Добавь хотя бы одну фотографию");return;}
+      const files = Array.from(imagesInput.files||[]);
+      if(files.length===0){ alert("Добавь хотя бы одну фотографию"); return; }
 
-      const overlayImg=await loadImage("Backgroung.png");
+      const {img:overlayImg,name:overlayName} = await findOverlay();
+      overlayStatus.textContent = overlayImg ? `Подложка: найдена (${overlayName})` : "Подложка: не найдена";
 
-      const captions=captionsEl.value.split(/\n\s*\n/g).map(s=>s.trim()).filter(Boolean);
+      const captions = captionsEl.value.split(/\n\s*\n/g).map(s=>s.trim()).filter(Boolean);
 
       for(let i=0;i<files.length;i++){
-        const photo=await loadImage(URL.createObjectURL(files[i]));
-        const W=overlayImg.naturalWidth;
-        const H=overlayImg.naturalHeight;
+        const photo = await loadImageFromFile(files[i]);
+        const W = overlayImg? overlayImg.naturalWidth  : photo.naturalWidth;
+        const H = overlayImg? overlayImg.naturalHeight : photo.naturalHeight;
 
-        const c=document.createElement("canvas");
-        c.width=W;c.height=H;
-        const ctx=c.getContext("2d");
+        const c = document.createElement("canvas"); c.width=W; c.height=H;
+        const ctx = c.getContext("2d");
 
-        const scale=Math.max(W/photo.naturalWidth,H/photo.naturalHeight);
-        const drawW=photo.naturalWidth*scale;
-        const drawH=photo.naturalHeight*scale;
-        const dx=(W-drawW)/2;
-        const dy=(H-drawH)/2;
-        ctx.drawImage(photo,dx,dy,drawW,drawH);
+        const scale = Math.max(W/photo.naturalWidth, H/photo.naturalHeight);
+        const drawW = photo.naturalWidth*scale;
+        const drawH = photo.naturalHeight*scale;
+        const dx = (W-drawW)/2;
+        const dy = (H-drawH)/2;
+        ctx.drawImage(photo, dx, dy, drawW, drawH);
 
-        ctx.font=`${parseInt(fontSize.value,10)}px ${fontFamily.value}`;
-        const maxW=Math.round(W*(parseInt(textWidthPct.value||88,10)/100));
-        const lines=captions[i]?wrapText(ctx,captions[i],maxW):[];
+        ctx.font = `${parseInt(fontSize.value,10)}px ${fontFamily.value}`;
+        const maxW = Math.round(W * (parseInt(textWidthPct.value||88,10)/100));
+        const lines = captions[i] ? wrapText(ctx, captions[i], maxW) : [];
 
-        const textAreaLeft=(W-maxW)/2; const pad=parseInt(padding.value,10);
-        let x=textAreaLeft+pad; if(textAlign.value==="center") x=W/2; if(textAlign.value==="right") x=W-textAreaLeft-pad;
-        const lineStep=(parseFloat(lineHeight.value)/100*parseInt(fontSize.value,10));
-        const textHeight=lines.length*lineStep;
-        const bottomLimit=H-parseInt(safeBottom.value||200,10);
-        const y=Math.max(pad, bottomLimit - textHeight - 4);
+        const textAreaLeft = (W - maxW)/2;
+        const pad = parseInt(padding.value,10);
+        let x = textAreaLeft + pad;
+        if(textAlign.value==="center") x = W/2;
+        if(textAlign.value==="right")  x = W - textAreaLeft - pad;
 
-        drawMultiline(ctx,lines,x,y);
+        const step = (parseFloat(lineHeight.value)/100 * parseInt(fontSize.value,10));
+        const textBlockH = lines.length * step;
+        const bottomLimit = H - parseInt(safeBottom.value||0,10);
+        const y = Math.max(pad, bottomLimit - textBlockH - 4);
 
-        ctx.drawImage(overlayImg,0,0,W,H);
+        drawMultiline(ctx, lines, x, y);
+
+        if(overlayImg) ctx.drawImage(overlayImg, 0, 0, W, H);
 
         const item=document.createElement("div");
         item.className="thumb";
         item.appendChild(c);
-        const actions=document.createElement("div");
-        actions.className="actions";
-        const btn=document.createElement("button");
-        btn.className="pill";
-        btn.textContent="Скачать PNG";
+        const actions=document.createElement("div"); actions.className="actions";
+        const btn=document.createElement("button"); btn.className="pill"; btn.textContent="Скачать PNG";
         btn.addEventListener("click",()=>{
           const a=document.createElement('a');
           a.href=c.toDataURL("image/png");
@@ -229,11 +252,11 @@
       }
     }
 
-    renderBtn.addEventListener("click",render);
-    $("downloadAll").addEventListener("click",()=>{
-      const btns=results.querySelectorAll(".pill");
-      if(btns.length===0){alert("Сначала собери превью");return;}
-      btns.forEach((b,idx)=>setTimeout(()=>b.click(),idx*150));
+    renderBtn.addEventListener("click", render);
+    $("downloadAll").addEventListener("click", ()=>{
+      const btns = results.querySelectorAll(".pill");
+      if(btns.length===0){ alert("Сначала собери превью"); return; }
+      btns.forEach((b,idx)=> setTimeout(()=>b.click(), idx*150));
     });
   </script>
 </body>
