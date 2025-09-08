@@ -3,36 +3,29 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Text & PNG Overlay Maker — fast</title>
+  <title>Text & PNG Overlay Maker — slots</title>
   <style>
-    @font-face {
-      font-family: 'Aeroport';
-      src: url('Aeroport-Bold.ttf') format('truetype');
-      font-weight: 700;
-      font-style: normal;
-      font-display: swap;
-    }
+    @font-face { font-family:'Aeroport'; src:url('Aeroport-Bold.ttf') format('truetype'); font-weight:700; font-style:normal; font-display:swap; }
     :root{--bg:#0b0f14;--panel:rgba(255,255,255,.06);--stroke:rgba(255,255,255,.15);--text:#e8eef6}
     *{box-sizing:border-box}
     body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial}
     h1{font-size:18px;margin:0 0 8px 0}
-    .wrap{display:grid;grid-template-columns:380px 1fr;gap:16px;min-height:100vh;padding:16px}
+    .wrap{display:grid;grid-template-columns:420px 1fr;gap:16px;min-height:100vh;padding:16px}
     .card{backdrop-filter:saturate(1.2) blur(8px);background:var(--panel);border:1px solid var(--stroke);border-radius:16px;padding:14px}
     label{display:block;font-size:12px;color:#b8c4d4;margin:8px 0 6px}
-    input[type="file"],select,textarea,input[type="number"],input[type="text"],button{width:100%}
-    textarea{min-height:140px;resize:vertical;border-radius:10px;border:1px solid var(--stroke);background:rgba(255,255,255,.03);color:var(--text);padding:10px}
-    input,select{border-radius:10px;border:1px solid var(--stroke);background:rgba(255,255,255,.03);color:var(--text);padding:8px}
+    input[type="file"],textarea,input[type="number"],input[type="text"],button{width:100%}
+    textarea{min-height:160px;resize:vertical;border-radius:10px;border:1px solid var(--stroke);background:rgba(255,255,255,.03);color:var(--text);padding:10px}
+    input{border-radius:10px;border:1px solid var(--stroke);background:rgba(255,255,255,.03);color:var(--text);padding:8px}
     .row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
     .controls{display:grid;gap:8px}
     .btn{cursor:pointer;border-radius:12px;border:1px solid var(--stroke);background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.03));padding:10px;font-weight:600;color:var(--text)}
     .btn:hover{background:linear-gradient(180deg,rgba(255,255,255,.12),rgba(255,255,255,.05))}
-    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
-    .thumb{position:relative;border:1px solid var(--stroke);border-radius:12px;overflow:hidden;background:#0b0f14}
-    .thumb canvas{display:block;width:100%;height:auto}
-    .thumb .actions{position:absolute;inset:auto 8px 8px 8px;display:flex;gap:8px}
-    .pill{font-size:12px;padding:6px 10px;border-radius:999px;border:1px solid var(--stroke);background:rgba(0,0,0,.4);cursor:pointer}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+    .slot{position:relative;border:1px solid var(--stroke);border-radius:12px;overflow:hidden;background:#0b0f14;padding-bottom:8px}
+    .slot canvas{display:block;width:100%;height:auto}
+    .slot .bar{display:flex;gap:8px;padding:8px}
     .note{font-size:12px;color:#9fb0c6}
-    .inline{display:flex;gap:8px;align-items:center}
+    .muted{opacity:.75}
   </style>
 </head>
 <body>
@@ -40,11 +33,8 @@
     <div class="card">
       <h1>Наложение текста на фото</h1>
       <div class="controls">
-        <label>Фотографии (можно несколько, порядок важен)</label>
-        <input id="imagesInput" type="file" accept="image/*" multiple />
-
-        <label>Текст — общий блок. Пустая строка = новый абзац → подпись для следующей картинки</label>
-        <textarea id="captions" placeholder="Абзац 1&#10;&#10;Абзац 2&#10;&#10;Абзац 3 ..."></textarea>
+        <label>Текст — общий блок. Пустая строка = новый абзац → отдельная карточка ниже</label>
+        <textarea id="captions" placeholder="Я въебал говна.&#10;&#10;Я купил iPad."></textarea>
 
         <div class="row">
           <div>
@@ -57,49 +47,34 @@
           </div>
         </div>
 
-        <div class="row3">
+        <div class="row">
           <div>
             <label>Цвет текста</label>
             <input id="fontColor" type="text" value="#ffffff" />
           </div>
-        </div>
-
-        <div class="row">
-          <div>
-            <label>Выравнивание</label>
-            <select id="textAlign">
-              <option value="center">По центру</option>
-              <option value="left">Слева</option>
-              <option value="right">Справа</option>
-            </select>
-          </div>
-          <div>
-            <label>Поля (внутр.), px</label>
-            <input id="padding" type="number" min="0" max="400" value="60" />
-          </div>
-        </div>
-
-        <div class="row">
           <div>
             <label>Безопасная зона снизу, px (текст выше линии)</label>
             <input id="safeBottom" type="number" min="0" max="1000" value="170" />
           </div>
-          <div>
-            <label>Ширина области текста, % от ширины холста</label>
-            <input id="textWidthPct" type="number" min="40" max="100" value="88" />
-          </div>
         </div>
 
         <div class="row">
-          <button class="btn" id="renderBtn">Собрать превью</button>
-          <button class="btn" id="downloadAll">Скачать все</button>
+          <div>
+            <label>Отступ слева, px</label>
+            <input id="leftPad" type="number" min="0" max="1000" value="60" />
+          </div>
+          <div>
+            <label>Отступ справа, px</label>
+            <input id="rightPad" type="number" min="0" max="1000" value="60" />
+          </div>
         </div>
 
-        <div class="inline">
-          <span id="overlayStatus" class="note">Подложка: ищем…</span>
-          <input id="overlayFile" type="file" accept="image/png" style="width:auto" />
+        <div class="note">Текст всегда по центру, подложка ищется как <code>background.png</code> (лежит рядом с этим HTML). Можно выбрать вручную ниже.</div>
+        <div>
+          <label class="muted">Подложка (PNG) — опционально</label>
+          <input id="overlayFile" type="file" accept="image/png" />
+          <div id="overlayStatus" class="note">Подложка: ищем…</div>
         </div>
-        <div class="note">Автопоиск только по имени: <code>background.png</code> (рядом с этим HTML). При желании можно выбрать PNG вручную.</div>
       </div>
     </div>
 
@@ -110,19 +85,20 @@
   </div>
 
   <script>
+    // ====== helpers ======
     const $ = (id)=>document.getElementById(id);
-    const imagesInput  = $("imagesInput");
-    const captionsEl   = $("captions");
-    const fontSize     = $("fontSize");
-    const lineHeight   = $("lineHeight");
-    const fontColor    = $("fontColor");
-    const textAlign    = $("textAlign");
-    const padding      = $("padding");
-    const safeBottom   = $("safeBottom");
-    const textWidthPct = $("textWidthPct");
-    const results      = $("results");
-    const overlayStatus= $("overlayStatus");
-    const overlayFile  = $("overlayFile");
+    const captionsEl = $("captions");
+    const fontSize = $("fontSize");
+    const lineHeight = $("lineHeight");
+    const fontColor = $("fontColor");
+    const safeBottom = $("safeBottom");
+    const leftPad = $("leftPad");
+    const rightPad = $("rightPad");
+    const results = $("results");
+    const overlayFile = $("overlayFile");
+    const overlayStatus = $("overlayStatus");
+
+    let overlayImg = null;
 
     function loadImageFromFile(file){
       return new Promise((resolve,reject)=>{
@@ -144,49 +120,6 @@
       if(line) lines.push(line);
       return lines;
     }
-    function drawMultiline(ctx, lines, x, y){
-      ctx.textAlign = textAlign.value;
-      ctx.textBaseline = "top";
-      ctx.shadowBlur=0; ctx.shadowOffsetY=0;
-      const step = parseInt(fontSize.value,10) * (parseFloat(lineHeight.value)/100);
-      for(let i=0;i<lines.length;i++){
-        const ly = y + i * step;
-        ctx.fillStyle=fontColor.value;
-        ctx.fillText(lines[i], x, ly);
-      }
-    }
-
-    let overlayImg = null;
-    async function findOverlayFast(){
-      overlayImg = null;
-      overlayStatus.textContent = 'Подложка: ищем…';
-      const names = ['background.png'];
-      let resolved = false;
-
-      await Promise.race([
-        new Promise((res)=>setTimeout(()=>res('timeout'), 1200)),
-        new Promise((res)=>{
-          let left = names.length;
-          names.forEach((n)=>{
-            const img = new Image();
-            img.onload = ()=>{ if(!resolved){ resolved=true; overlayImg=img; overlayStatus.textContent='Подложка: найдена ('+n+')'; res('ok'); } };
-            img.onerror = ()=>{ if(--left===0 && !resolved){ overlayStatus.textContent='Подложка: не найдена'; res('fail'); } };
-            img.src = n + '?v=' + Date.now();
-          });
-        })
-      ]);
-      if(!overlayImg) overlayStatus.textContent = 'Подложка: не найдена';
-    }
-
-    overlayFile.addEventListener('change', async (e)=>{
-      const f = e.target.files && e.target.files[0];
-      if(!f) return;
-      try{ overlayImg = await loadImageFromFile(f); overlayStatus.textContent = 'Подложка: подгружена вручную ('+(f.name||'')+')'; }
-      catch{ overlayStatus.textContent = 'Подложка: ошибка загрузки'; overlayImg=null; }
-    });
-
-    findOverlayFast();
-
     function objectFitCoverDraw(ctx, img, W, H){
       const scale = Math.max(W/img.naturalWidth, H/img.naturalHeight);
       const drawW = img.naturalWidth*scale;
@@ -196,51 +129,100 @@
       ctx.drawImage(img, dx, dy, drawW, drawH);
     }
 
-    async function render(){
-      results.innerHTML="";
-      const files = Array.from(imagesInput.files||[]);
-      if(files.length===0){ alert("Добавь хотя бы одну фотографию"); return; }
+    async function findOverlay(){
+      overlayImg = null; overlayStatus.textContent = 'Подложка: ищем…';
+      await Promise.race([
+        new Promise((res)=>setTimeout(()=>res('timeout'), 1200)),
+        new Promise((res)=>{
+          const img = new Image();
+          img.onload = ()=>{ overlayImg = img; overlayStatus.textContent = 'Подложка: найдена (background.png)'; res('ok'); };
+          img.onerror = ()=>{ overlayStatus.textContent = 'Подложка: не найдена'; res('fail'); };
+          img.src = 'background.png?v='+Date.now();
+        })
+      ]);
+      if(!overlayImg) overlayStatus.textContent = 'Подложка: не найдена';
+    }
 
-      const captions = captionsEl.value.split(/\n\s*\n/g).map(s=>s.trim());
+    overlayFile.addEventListener('change', async (e)=>{
+      const f = e.target.files && e.target.files[0];
+      if(!f) return;
+      try{ overlayImg = await loadImageFromFile(f); overlayStatus.textContent = 'Подложка: подгружена вручную ('+(f.name||'')+')'; renderAll(); }
+      catch{ overlayStatus.textContent = 'Подложка: ошибка загрузки'; overlayImg=null; }
+    });
 
-      for(let i=0;i<files.length;i++){
-        const photo = await loadImageFromFile(files[i]);
-        const W = overlayImg? overlayImg.naturalWidth  : photo.naturalWidth;
-        const H = overlayImg? overlayImg.naturalHeight : photo.naturalHeight;
+    // ====== Slots ======
+    function getParagraphs(){
+      return captionsEl.value.split(/\n\s*\n/g).map(s=>s.trim());
+    }
 
-        const c = document.createElement('canvas'); c.width=W; c.height=H;
-        const ctx = c.getContext('2d');
+    function createSlot(index, text){
+      const slot = document.createElement('div');
+      slot.className = 'slot';
+      const canvas = document.createElement('canvas');
+      canvas.dataset.index = index;
+      slot.appendChild(canvas);
+      const bar = document.createElement('div');
+      bar.className='bar';
+      const file = document.createElement('input');
+      file.type='file'; file.accept='image/*'; file.dataset.index=index;
+      const hint = document.createElement('div');
+      hint.className='note';
+      hint.textContent='Фото для карточки '+(index+1);
+      bar.appendChild(file); bar.appendChild(hint);
+      slot.appendChild(bar);
+      file.addEventListener('change',()=> renderSlot(index, text, file.files[0]||null, canvas));
+      return {slot, canvas, file};
+    }
 
-        objectFitCoverDraw(ctx, photo, W, H);
-        if(overlayImg) ctx.drawImage(overlayImg, 0, 0, W, H);
-        ctx.font = `700 ${parseInt(fontSize.value,10)}px Aeroport, system-ui, sans-serif`;
-        const maxW = Math.round(W * (parseInt(textWidthPct.value,10)/100));
-        const lines = (captions[i]||'').trim()? wrapText(ctx, captions[i], maxW) : [];
-        const areaLeft = (W - maxW)/2;
-        const pad = parseInt(padding.value,10);
-        let x = areaLeft + pad;
-        if(textAlign.value==='center') x = W/2;
-        if(textAlign.value==='right')  x = W - areaLeft - pad;
-        const step = parseInt(fontSize.value,10) * (parseFloat(lineHeight.value)/100);
-        const blockH = lines.length * step;
-        const bottomLimit = H - parseInt(safeBottom.value,10);
-        const y = Math.max(pad, bottomLimit - blockH - 4);
-        drawMultiline(ctx, lines, x, y);
+    async function renderSlot(i, text, file, canvasEl){
+      // размеры берём из подложки, если она есть, иначе из фото, а если фото нет — 1080x1920
+      const tempImg = file ? await loadImageFromFile(file) : null;
+      const W = overlayImg? overlayImg.naturalWidth : (tempImg? tempImg.naturalWidth : 1080);
+      const H = overlayImg? overlayImg.naturalHeight: (tempImg? tempImg.naturalHeight: 1920);
 
-        const item=document.createElement('div'); item.className='thumb'; item.appendChild(c);
-        const actions=document.createElement('div'); actions.className='actions';
-        const btn=document.createElement('button'); btn.className='pill'; btn.textContent='Скачать PNG';
-        btn.addEventListener('click',()=>{ const a=document.createElement('a'); a.href=c.toDataURL('image/png'); a.download=`result_${String(i+1).padStart(2,'0')}.png`; a.click(); });
-        actions.appendChild(btn); item.appendChild(actions); results.appendChild(item);
+      const c = canvasEl; c.width=W; c.height=H; const ctx=c.getContext('2d');
+      ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H);
+      if(tempImg) objectFitCoverDraw(ctx, tempImg, W, H);
+      if(overlayImg) ctx.drawImage(overlayImg,0,0,W,H);
+
+      ctx.font = `700 ${parseInt(fontSize.value,10)}px Aeroport, system-ui, sans-serif`;
+      const maxW = Math.max(10, W - parseInt(leftPad.value,10) - parseInt(rightPad.value,10));
+      const lines = text? wrapText(ctx, text, maxW) : [];
+
+      const step = parseInt(fontSize.value,10) * (parseFloat(lineHeight.value)/100);
+      const blockH = lines.length * step;
+      const yBottom = H - parseInt(safeBottom.value,10);
+      const y = Math.max(10, yBottom - blockH - 4);
+      const x = parseInt(leftPad.value,10) + maxW/2; // центр относительно области с учётом левого/правого отступа
+
+      ctx.textAlign='center'; ctx.textBaseline='top';
+      ctx.fillStyle=fontColor.value;
+      for(let k=0;k<lines.length;k++) ctx.fillText(lines[k], x, y + k*step);
+    }
+
+    async function renderAll(){
+      const paras = getParagraphs();
+      results.innerHTML='';
+      // Создаём слоты под каждый абзац
+      const slotRefs=[];
+      paras.forEach((t,idx)=>{
+        const {slot,canvas,file} = createSlot(idx, t);
+        results.appendChild(slot);
+        slotRefs.push({canvas,file,text:t,index:idx});
+      });
+      // Рисуем каждый (без фото — просто подложка+текст на пустом фоне)
+      for(const ref of slotRefs){
+        await renderSlot(ref.index, ref.text, ref.file.files?.[0]||null, ref.canvas);
       }
     }
 
-    document.getElementById('renderBtn').addEventListener('click', render);
-    document.getElementById('downloadAll').addEventListener('click', ()=>{
-      const btns = results.querySelectorAll('.pill');
-      if(btns.length===0){ alert('Сначала собери превью'); return; }
-      btns.forEach((b,idx)=> setTimeout(()=>b.click(), idx*150));
-    });
+    // события
+    captionsEl.addEventListener('input', renderAll);
+    [fontSize,lineHeight,fontColor,safeBottom,leftPad,rightPad].forEach(el=> el.addEventListener('input', renderAll));
+
+    // старт
+    findOverlay();
+    renderAll();
   </script>
 </body>
 </html>
