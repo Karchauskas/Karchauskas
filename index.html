@@ -18,8 +18,11 @@
     .wrap{display:grid;grid-template-columns:380px 1fr;gap:16px;min-height:100vh;padding:16px}
     .card{backdrop-filter:saturate(1.2) blur(8px);background:var(--panel);border:1px solid var(--stroke);border-radius:16px;padding:14px}
     label{display:block;font-size:12px;color:#b8c4d4;margin:8px 0 6px}
-    input[type="file"],textarea,button{width:100%}
+    input[type="file"],select,textarea,input[type="number"],input[type="text"],button{width:100%}
     textarea{min-height:140px;resize:vertical;border-radius:10px;border:1px solid var(--stroke);background:rgba(255,255,255,.03);color:var(--text);padding:10px}
+    input,select{border-radius:10px;border:1px solid var(--stroke);background:rgba(255,255,255,.03);color:var(--text);padding:8px}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
     .controls{display:grid;gap:8px}
     .btn{cursor:pointer;border-radius:12px;border:1px solid var(--stroke);background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.03));padding:10px;font-weight:600;color:var(--text)}
     .btn:hover{background:linear-gradient(180deg,rgba(255,255,255,.12),rgba(255,255,255,.05))}
@@ -42,18 +45,47 @@
         <label>Текст — общий блок. Пустая строка = новый абзац → подпись для следующей картинки</label>
         <textarea id="captions" placeholder="Абзац 1&#10;&#10;Абзац 2&#10;&#10;Абзац 3 ..."></textarea>
 
+        <div class="row">
+          <div>
+            <label>Размер текста, px</label>
+            <input id="fontSize" type="number" min="8" max="256" value="40" />
+          </div>
+          <div>
+            <label>Межстрочный, %</label>
+            <input id="lineHeight" type="number" min="80" max="200" value="120" />
+          </div>
+        </div>
+
         <div class="row3">
           <div>
             <label>Цвет текста</label>
             <input id="fontColor" type="text" value="#ffffff" />
           </div>
+        </div>
+
+        <div class="row">
           <div>
-            <label>Контур (stroke), px</label>
-            <input id="strokeWidth" type="number" min="0" max="10" value="2" />
+            <label>Выравнивание</label>
+            <select id="textAlign">
+              <option value="center">По центру</option>
+              <option value="left">Слева</option>
+              <option value="right">Справа</option>
+            </select>
           </div>
           <div>
-            <label>Цвет контура</label>
-            <input id="strokeColor" type="text" value="#000000" />
+            <label>Поля (внутр.), px</label>
+            <input id="padding" type="number" min="0" max="400" value="60" />
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label>Безопасная зона снизу, px (текст выше линии)</label>
+            <input id="safeBottom" type="number" min="0" max="1000" value="170" />
+          </div>
+          <div>
+            <label>Ширина области текста, % от ширины холста</label>
+            <input id="textWidthPct" type="number" min="40" max="100" value="88" />
           </div>
         </div>
 
@@ -76,19 +108,16 @@
     const $ = (id)=>document.getElementById(id);
     const imagesInput  = $("imagesInput");
     const captionsEl   = $("captions");
+    const fontSize     = $("fontSize");
+    const lineHeight   = $("lineHeight");
     const fontColor    = $("fontColor");
-    const strokeWidth  = $("strokeWidth");
-    const strokeColor  = $("strokeColor");
+    const textAlign    = $("textAlign");
+    const padding      = $("padding");
+    const safeBottom   = $("safeBottom");
+    const textWidthPct = $("textWidthPct");
     const renderBtn    = $("renderBtn");
     const results      = $("results");
     const overlayStatus= $("overlayStatus");
-
-    const FIXED_FONT = 'bold 40px Aeroport, sans-serif';
-    const FIXED_PADDING = 56;
-    const FIXED_SAFE_BOTTOM = 132;
-    const FIXED_TEXT_WIDTH_PCT = 85;
-    const FIXED_ALIGN = 'center';
-    const FIXED_LINE_HEIGHT = 1.2;
 
     function loadImageFromFile(file){
       return new Promise((resolve,reject)=>{
@@ -113,31 +142,21 @@
     }
 
     function drawMultiline(ctx, lines, x, y, lineHeight){
-      ctx.textAlign = FIXED_ALIGN;
+      ctx.textAlign = textAlign.value;
       ctx.textBaseline = "top";
-      const step = parseInt(40,10) * lineHeight;
+      const step = parseInt(fontSize.value,10) * (parseFloat(lineHeight.value)/100);
       for(let i=0;i<lines.length;i++){
         const ly = y + i * step;
-        if(parseInt(strokeWidth.value,10)>0){
-          ctx.lineWidth=parseInt(strokeWidth.value,10);
-          ctx.strokeStyle=strokeColor.value;
-          ctx.strokeText(lines[i], x, ly);
-        }
         ctx.fillStyle=fontColor.value;
         ctx.fillText(lines[i], x, ly);
       }
     }
 
-    function loadOverlay(names, cb){
-      let idx = 0;
-      const tryNext = ()=>{
-        if(idx>=names.length) return cb(null,null);
-        const img = new Image();
-        img.onload = ()=> cb(img,names[idx]);
-        img.onerror = ()=> { idx++; tryNext(); };
-        img.src = names[idx] + "?v="+Date.now();
-      };
-      tryNext();
+    function loadOverlay(cb){
+      const img = new Image();
+      img.onload = ()=> cb(img,"overlay.png");
+      img.onerror = ()=> cb(null,null);
+      img.src = "overlay.png?v="+Date.now();
     }
 
     async function render(){
@@ -145,7 +164,7 @@
       const files = Array.from(imagesInput.files||[]);
       if(files.length===0){ alert("Добавь хотя бы одну фотографию"); return; }
 
-      loadOverlay(["overlay.png","Overlay.png","Backgroung.png","background.png","Background.png"], async (overlayImg,overlayName)=>{
+      loadOverlay(async (overlayImg,overlayName)=>{
         overlayStatus.textContent = overlayImg ? `Подложка: найдена (${overlayName})` : "Подложка: не найдена";
 
         const captions = captionsEl.value.split(/\n\s*\n/g).map(s=>s.trim()).filter(Boolean);
@@ -167,19 +186,21 @@
 
           if(overlayImg) ctx.drawImage(overlayImg, 0, 0, W, H);
 
-          ctx.font = FIXED_FONT;
-          const maxW = Math.round(W * (FIXED_TEXT_WIDTH_PCT/100));
+          ctx.font = `bold ${parseInt(fontSize.value,10)}px Aeroport, sans-serif`;
+          const maxW = Math.round(W * (parseInt(textWidthPct.value||88,10)/100));
           const lines = captions[i] ? wrapText(ctx, captions[i], maxW) : [];
 
           const textAreaLeft = (W - maxW)/2;
-          let x = W/2; // по центру фиксировано
+          let x = textAreaLeft + parseInt(padding.value,10);
+          if(textAlign.value==="center") x = W/2;
+          if(textAlign.value==="right")  x = W - textAreaLeft - parseInt(padding.value,10);
 
-          const step = parseInt(40,10) * FIXED_LINE_HEIGHT;
+          const step = parseInt(fontSize.value,10) * (parseFloat(lineHeight.value)/100);
           const textBlockH = lines.length * step;
-          const bottomLimit = H - FIXED_SAFE_BOTTOM;
-          const y = Math.max(FIXED_PADDING, bottomLimit - textBlockH - 4);
+          const bottomLimit = H - parseInt(safeBottom.value||0,10);
+          const y = Math.max(parseInt(padding.value,10), bottomLimit - textBlockH - 4);
 
-          drawMultiline(ctx, lines, x, y, FIXED_LINE_HEIGHT);
+          drawMultiline(ctx, lines, x, y, parseFloat(lineHeight.value)/100);
 
           const item=document.createElement("div");
           item.className="thumb";
