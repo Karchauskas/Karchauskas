@@ -26,6 +26,18 @@
     .slot .bar{display:flex;gap:8px;padding:8px}
     .note{font-size:12px;color:#9fb0c6}
     .muted{opacity:.75}
+
+    /* ===== Mobile-first adjustments ===== */
+    @media (max-width: 900px){
+      .wrap{grid-template-columns:1fr; padding:12px; gap:12px}
+      h1{font-size:16px}
+      .row{grid-template-columns:1fr}
+      .grid{grid-template-columns:1fr}
+      .card{padding:12px}
+      textarea{min-height:120px}
+      .slot .bar{flex-direction:column}
+      input,button{font-size:16px}
+    }
   </style>
 </head>
 <body>
@@ -69,7 +81,7 @@
           </div>
         </div>
 
-        <div class="note">Текст всегда по центру, подложка ищется как <code>background.png</code> (лежит рядом с этим HTML). Можно выбрать вручную ниже.</div>
+        <div class="note">Текст всегда выравнивается слева. Подложка ищется как <code>background.png</code> (рядом с этим HTML). Можно выбрать вручную ниже.</div>
         <div>
           <label class="muted">Подложка (PNG) — опционально</label>
           <input id="overlayFile" type="file" accept="image/png" />
@@ -85,7 +97,6 @@
   </div>
 
   <script>
-    // ====== helpers ======
     const $ = (id)=>document.getElementById(id);
     const captionsEl = $("captions");
     const fontSize = $("fontSize");
@@ -150,7 +161,6 @@
       catch{ overlayStatus.textContent = 'Подложка: ошибка загрузки'; overlayImg=null; }
     });
 
-    // ====== Slots ======
     function getParagraphs(){
       return captionsEl.value.split(/\n\s*\n/g).map(s=>s.trim());
     }
@@ -175,7 +185,6 @@
     }
 
     async function renderSlot(i, text, file, canvasEl){
-      // размеры берём из подложки, если она есть, иначе из фото, а если фото нет — 1080x1920
       const tempImg = file ? await loadImageFromFile(file) : null;
       const W = overlayImg? overlayImg.naturalWidth : (tempImg? tempImg.naturalWidth : 1080);
       const H = overlayImg? overlayImg.naturalHeight: (tempImg? tempImg.naturalHeight: 1920);
@@ -193,9 +202,9 @@
       const blockH = lines.length * step;
       const yBottom = H - parseInt(safeBottom.value,10);
       const y = Math.max(10, yBottom - blockH - 4);
-      const x = parseInt(leftPad.value,10) + maxW/2; // центр относительно области с учётом левого/правого отступа
+      const x = parseInt(leftPad.value,10);
 
-      ctx.textAlign='center'; ctx.textBaseline='top';
+      ctx.textAlign='left'; ctx.textBaseline='top';
       ctx.fillStyle=fontColor.value;
       for(let k=0;k<lines.length;k++) ctx.fillText(lines[k], x, y + k*step);
     }
@@ -203,24 +212,20 @@
     async function renderAll(){
       const paras = getParagraphs();
       results.innerHTML='';
-      // Создаём слоты под каждый абзац
       const slotRefs=[];
       paras.forEach((t,idx)=>{
         const {slot,canvas,file} = createSlot(idx, t);
         results.appendChild(slot);
         slotRefs.push({canvas,file,text:t,index:idx});
       });
-      // Рисуем каждый (без фото — просто подложка+текст на пустом фоне)
       for(const ref of slotRefs){
         await renderSlot(ref.index, ref.text, ref.file.files?.[0]||null, ref.canvas);
       }
     }
 
-    // события
     captionsEl.addEventListener('input', renderAll);
     [fontSize,lineHeight,fontColor,safeBottom,leftPad,rightPad].forEach(el=> el.addEventListener('input', renderAll));
 
-    // старт
     findOverlay();
     renderAll();
   </script>
