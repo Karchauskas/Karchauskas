@@ -10,7 +10,7 @@
     *{box-sizing:border-box}
     body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial}
     h1{font-size:18px;margin:0 0 8px 0}
-    .wrap{display:grid;grid-template-columns:420px 1fr;gap:16px;min-height:100vh;padding:16px}
+    .wrap{display:grid;grid-template-columns:1fr;gap:16px;min-height:100vh;padding:16px}
     .card{backdrop-filter:saturate(1.2) blur(8px);background:var(--panel);border:1px solid var(--stroke);border-radius:16px;padding:14px}
     label{display:block;font-size:12px;color:#b8c4d4;margin:8px 0 6px}
     input[type="file"],textarea,input[type="number"],input[type="text"],button{width:100%}
@@ -20,24 +20,16 @@
     .controls{display:grid;gap:8px}
     .btn{cursor:pointer;border-radius:12px;border:1px solid var(--stroke);background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.03));padding:10px;font-weight:600;color:var(--text)}
     .btn:hover{background:linear-gradient(180deg,rgba(255,255,255,.12),rgba(255,255,255,.05))}
-    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+
+    /* Два слота в ряд — компактно */
+    .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
     .slot{position:relative;border:1px solid var(--stroke);border-radius:12px;overflow:hidden;background:#0b0f14;padding-bottom:8px}
     .slot canvas{display:block;width:100%;height:auto}
     .slot .bar{display:flex;gap:8px;padding:8px}
     .note{font-size:12px;color:#9fb0c6}
     .muted{opacity:.75}
 
-    /* ===== Mobile-first adjustments ===== */
-    @media (max-width: 900px){
-      .wrap{grid-template-columns:1fr; padding:12px; gap:12px}
-      h1{font-size:16px}
-      .row{grid-template-columns:1fr}
-      .grid{grid-template-columns:1fr}
-      .card{padding:12px}
-      textarea{min-height:120px}
-      .slot .bar{flex-direction:column}
-      input,button{font-size:16px}
-    }
+    @media (min-width:1000px){ .wrap{grid-template-columns:420px 1fr} }
   </style>
 </head>
 <body>
@@ -45,8 +37,8 @@
     <div class="card">
       <h1>Наложение текста на фото</h1>
       <div class="controls">
-        <label>Текст — общий блок. Пустая строка = новый абзац → отдельная карточка ниже</label>
-        <textarea id="captions" placeholder="Я въебал говна.&#10;&#10;Я купил iPad."></textarea>
+        <label>Текст — пустая строка = новый абзац → отдельная карточка ниже</label>
+        <textarea id="captions" placeholder="Твой текст...&#10;&#10;Следующий абзац..."></textarea>
 
         <div class="row">
           <div>
@@ -65,27 +57,9 @@
             <input id="fontColor" type="text" value="#ffffff" />
           </div>
           <div>
-            <label>Безопасная зона снизу, px (текст выше линии)</label>
-            <input id="safeBottom" type="number" min="0" max="1000" value="170" />
+            <label class="muted">Подложка</label>
+            <div class="note" id="overlayStatus">Background.png</div>
           </div>
-        </div>
-
-        <div class="row">
-          <div>
-            <label>Отступ слева, px</label>
-            <input id="leftPad" type="number" min="0" max="1000" value="60" />
-          </div>
-          <div>
-            <label>Отступ справа, px</label>
-            <input id="rightPad" type="number" min="0" max="1000" value="60" />
-          </div>
-        </div>
-
-        <div class="note">Текст всегда выравнивается слева. Подложка ищется как <code>background.png</code> (рядом с этим HTML). Можно выбрать вручную ниже.</div>
-        <div>
-          <label class="muted">Подложка (PNG) — опционально</label>
-          <input id="overlayFile" type="file" accept="image/png" />
-          <div id="overlayStatus" class="note">Подложка: ищем…</div>
         </div>
       </div>
     </div>
@@ -97,16 +71,19 @@
   </div>
 
   <script>
+    // ====== фиксированные значения ======
+    const FIX_SAFE_BOTTOM = 135;  // px
+    const FIX_LEFT = 92;          // px
+    const FIX_RIGHT = 90;         // px
+    const OVERLAY_NAME = 'Background.png';
+
+    // ====== helpers ======
     const $ = (id)=>document.getElementById(id);
     const captionsEl = $("captions");
     const fontSize = $("fontSize");
     const lineHeight = $("lineHeight");
     const fontColor = $("fontColor");
-    const safeBottom = $("safeBottom");
-    const leftPad = $("leftPad");
-    const rightPad = $("rightPad");
     const results = $("results");
-    const overlayFile = $("overlayFile");
     const overlayStatus = $("overlayStatus");
 
     let overlayImg = null;
@@ -140,26 +117,13 @@
       ctx.drawImage(img, dx, dy, drawW, drawH);
     }
 
-    async function findOverlay(){
-      overlayImg = null; overlayStatus.textContent = 'Подложка: ищем…';
-      await Promise.race([
-        new Promise((res)=>setTimeout(()=>res('timeout'), 1200)),
-        new Promise((res)=>{
-          const img = new Image();
-          img.onload = ()=>{ overlayImg = img; overlayStatus.textContent = 'Подложка: найдена (background.png)'; res('ok'); };
-          img.onerror = ()=>{ overlayStatus.textContent = 'Подложка: не найдена'; res('fail'); };
-          img.src = 'background.png?v='+Date.now();
-        })
-      ]);
-      if(!overlayImg) overlayStatus.textContent = 'Подложка: не найдена';
+    async function loadOverlay(){
+      overlayImg = null; overlayStatus.textContent = OVERLAY_NAME;
+      const img = new Image();
+      img.onload = ()=>{ overlayImg = img; };
+      img.onerror = ()=>{ overlayImg = null; };
+      img.src = OVERLAY_NAME + '?v=' + Date.now();
     }
-
-    overlayFile.addEventListener('change', async (e)=>{
-      const f = e.target.files && e.target.files[0];
-      if(!f) return;
-      try{ overlayImg = await loadImageFromFile(f); overlayStatus.textContent = 'Подложка: подгружена вручную ('+(f.name||'')+')'; renderAll(); }
-      catch{ overlayStatus.textContent = 'Подложка: ошибка загрузки'; overlayImg=null; }
-    });
 
     function getParagraphs(){
       return captionsEl.value.split(/\n\s*\n/g).map(s=>s.trim());
@@ -195,14 +159,14 @@
       if(overlayImg) ctx.drawImage(overlayImg,0,0,W,H);
 
       ctx.font = `700 ${parseInt(fontSize.value,10)}px Aeroport, system-ui, sans-serif`;
-      const maxW = Math.max(10, W - parseInt(leftPad.value,10) - parseInt(rightPad.value,10));
+      const maxW = Math.max(10, W - FIX_LEFT - FIX_RIGHT);
       const lines = text? wrapText(ctx, text, maxW) : [];
 
       const step = parseInt(fontSize.value,10) * (parseFloat(lineHeight.value)/100);
       const blockH = lines.length * step;
-      const yBottom = H - parseInt(safeBottom.value,10);
+      const yBottom = H - FIX_SAFE_BOTTOM;
       const y = Math.max(10, yBottom - blockH - 4);
-      const x = parseInt(leftPad.value,10);
+      const x = FIX_LEFT;
 
       ctx.textAlign='left'; ctx.textBaseline='top';
       ctx.fillStyle=fontColor.value;
@@ -224,9 +188,9 @@
     }
 
     captionsEl.addEventListener('input', renderAll);
-    [fontSize,lineHeight,fontColor,safeBottom,leftPad,rightPad].forEach(el=> el.addEventListener('input', renderAll));
+    [fontSize,lineHeight,fontColor].forEach(el=> el.addEventListener('input', renderAll));
 
-    findOverlay();
+    loadOverlay();
     renderAll();
   </script>
 </body>
