@@ -24,7 +24,9 @@
     /* Два слота в ряд — компактно даже на мобиле */
     .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
     .slot{position:relative;border:1px solid var(--stroke);border-radius:12px;overflow:hidden;background:#0b0f14}
-    .slot canvas{display:block;width:100%;height:auto}
+    .slot canvas{display:none;width:100%;height:auto}
+    .slot img.preview{display:block;width:100%;height:auto;-webkit-touch-callout: default;image-rendering:auto} /* canvas скрыт, используем для download */
+    .slot img.preview{display:block;width:100%;height:auto;-webkit-touch-callout: default; image-rendering:auto;}
     .bar{display:flex;gap:8px;padding:8px;align-items:center}
     .bar .note{font-size:12px;color:#9fb0c6}
     .actions{display:flex;gap:8px}
@@ -153,6 +155,8 @@
         const slot = document.createElement('div');
         slot.className='slot';
         const canvas = document.createElement('canvas');
+        const imgTag = document.createElement('img'); imgTag.className='preview'; imgTag.alt='preview'; imgTag.draggable=false;
+        const imgTag = document.createElement('img'); imgTag.className='preview'; imgTag.alt='preview'; imgTag.draggable=false;
         const bar = document.createElement('div'); bar.className='bar';
         const file = document.createElement('input'); file.type='file'; file.accept='image/*';
         const hint = document.createElement('div'); hint.className='note'; hint.textContent='Фото '+(idx+1);
@@ -160,10 +164,10 @@
         const dl = document.createElement('button'); dl.className='btn'; dl.textContent='Скачать PNG';
         actions.appendChild(dl);
         bar.appendChild(file); bar.appendChild(hint); bar.appendChild(actions);
-        slot.appendChild(canvas); slot.appendChild(bar);
+        slot.appendChild(imgTag); slot.appendChild(bar);
         results.appendChild(slot);
 
-        const record = {canvas, fileInput:file, imgDataUrl:null, imgEl:null, text:""};
+        const record = {canvas, imgTag, fileInput:file, imgDataUrl:null, imgEl:null, text:""};
         file.addEventListener('change', async ()=>{
           if(file.files && file.files[0]){
             record.imgDataUrl = await dataUrlFromFile(file.files[0]);
@@ -177,7 +181,7 @@
       // удалить лишние
       while(slots.length > count){
         const rec = slots.pop();
-        rec.canvas.parentElement.remove();
+        rec.container.remove();
       }
     }
 
@@ -189,7 +193,6 @@
     }
 
     async function renderSlot(rec){
-      // определяем размер
       const W = overlayImg? overlayImg.naturalWidth : (rec.imgEl? rec.imgEl.naturalWidth : 1080);
       const H = overlayImg? overlayImg.naturalHeight: (rec.imgEl? rec.imgEl.naturalHeight: 1920);
 
@@ -210,6 +213,10 @@
       const y = Math.max(10, yBottom - blockH - 4);
       const x = FIX_LEFT;
       for(let i=0;i<lines.length;i++) ctx.fillText(lines[i], x, y + i*step);
+      try{ rec.imgTag.src = c.toDataURL('image/png'); }catch(e){}
+
+      // обновляем img для долгого тапа «Сохранить изображение»
+      try{ rec.imgTag.src = c.toDataURL('image/png'); }catch(e){}
     }
 
     async function renderAll(){
@@ -218,6 +225,7 @@
       for(let i=0;i<slots.length;i++){
         slots[i].text = paras[i] || '';
         await renderSlot(slots[i]);
+        // превью для долгого тапа
       }
     }
 
