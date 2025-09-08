@@ -13,24 +13,20 @@
     .wrap{display:grid;grid-template-columns:1fr;gap:12px;min-height:100vh;padding:12px}
     .card{backdrop-filter:saturate(1.2) blur(8px);background:var(--panel);border:1px solid var(--stroke);border-radius:16px;padding:12px}
     label{display:block;font-size:12px;color:#b8c4d4;margin:8px 0 6px}
-    input[type="file"],textarea,input[type="number"],input[type="text"],button{width:100%}
-    textarea{min-height:140px;resize:vertical;border-radius:10px;border:1px solid var(--stroke);background:rgba(255,255,255,.03);color:var(--text);padding:10px}
-    input,button{border-radius:10px;border:1px solid var(--stroke);background:rgba(255,255,255,.03);color:var(--text);padding:10px}
+    textarea{min-height:140px;resize:vertical;border-radius:10px;border:1px solid var(--stroke);background:rgba(255,255,255,.03);color:var(--text);padding:10px;width:100%}
+    input,button{border-radius:10px;border:1px solid var(--stroke);background:rgba(255,255,255,.03);color:var(--text);padding:10px;width:100%}
     .row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
     .controls{display:grid;gap:8px}
     .btn{cursor:pointer;border-radius:12px;border:1px solid var(--stroke);background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.03));padding:10px;font-weight:600;color:var(--text)}
     .btn:hover{background:linear-gradient(180deg,rgba(255,255,255,.12),rgba(255,255,255,.05))}
-
-    /* Два слота в ряд — компактно даже на мобиле */
+    /* две карточки в ряд, компактно */
     .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
     .slot{position:relative;border:1px solid var(--stroke);border-radius:12px;overflow:hidden;background:#0b0f14}
     .slot canvas{display:none;width:100%;height:auto}
-    .slot img.preview{display:block;width:100%;height:auto;-webkit-touch-callout: default;image-rendering:auto} /* canvas скрыт, используем для download */
-    .slot img.preview{display:block;width:100%;height:auto;-webkit-touch-callout: default; image-rendering:auto;}
+    .slot img.preview{display:block;width:100%;height:auto;-webkit-touch-callout: default; image-rendering:auto}
     .bar{display:flex;gap:8px;padding:8px;align-items:center}
     .bar .note{font-size:12px;color:#9fb0c6}
     .actions{display:flex;gap:8px}
-
     @media (min-width:1024px){ .wrap{grid-template-columns:420px 1fr} }
   </style>
 </head>
@@ -65,41 +61,36 @@
         </div>
 
         <div class="row">
-          <button class="btn" id="downloadAll">Скачать все PNG (1,2,3…)</button>
+          <button class="btn" id="downloadAll">Скачать все PNG (1,2,3...)</button>
           <div class="note" id="bgStatus">Используем: Background.png</div>
         </div>
       </div>
     </div>
 
     <div class="card">
-      <h1>Результаты (долгое нажатие по картинке — «Сохранить» на iPhone)</h1>
+      <h1>Результаты (зажми картинку → «Сохранить изображение»)</h1>
       <div id="results" class="grid"></div>
     </div>
   </div>
 
   <script>
-    // ====== фиксированные значения ======
-    const FIX_SAFE_BOTTOM = 135;  // px
-    const FIX_LEFT = 92;          // px
-    const FIX_RIGHT = 90;         // px
+    // фиксированные значения
+    const FIX_SAFE_BOTTOM = 135, FIX_LEFT = 92, FIX_RIGHT = 90;
     const BG_FILE = 'Background.png';
 
-    // ====== refs ======
     const $ = (id)=>document.getElementById(id);
     const captionsEl = $("captions");
-    const fontSize = $("fontSize");
+    const fontSize   = $("fontSize");
     const lineHeight = $("lineHeight");
-    const fontColor = $("fontColor");
-    const results = $("results");
+    const fontColor  = $("fontColor");
+    const results    = $("results");
     const downloadAllBtn = $("downloadAll");
-    const reloadBgBtn = $("reloadBg");
-    const bgStatus = $("bgStatus");
+    const reloadBgBtn    = $("reloadBg");
+    const bgStatus       = $("bgStatus");
 
-    // ====== state ======
     let overlayImg = null;
-    let slots = []; // [{canvas, fileInput, imgDataUrl, imgEl, text}]
+    let slots = []; // {container, canvas, imgTag, fileInput, imgDataUrl, imgEl, text}
 
-    // ====== utils ======
     function dataUrlFromFile(file){
       return new Promise((resolve,reject)=>{
         const r = new FileReader();
@@ -135,7 +126,6 @@
       const dy = (H-drawH)/2;
       ctx.drawImage(img, dx, dy, drawW, drawH);
     }
-
     async function loadBackground(){
       bgStatus.textContent = 'Идёт загрузка: ' + BG_FILE;
       return new Promise((resolve)=>{
@@ -149,36 +139,33 @@
     function paragraphs(){ return captionsEl.value.split(/\n\s*\n/g).map(s=>s.trim()); }
 
     function ensureSlots(count){
-      // не пересоздаём существующие, чтобы не терять выбранные фото
       while(slots.length < count){
         const idx = slots.length;
-        const slot = document.createElement('div');
-        slot.className='slot';
+        const slot = document.createElement('div'); slot.className='slot';
         const canvas = document.createElement('canvas');
-        const imgTag = document.createElement('img'); imgTag.className='preview'; imgTag.alt='preview'; imgTag.draggable=false;
-        const imgTag = document.createElement('img'); imgTag.className='preview'; imgTag.alt='preview'; imgTag.draggable=false;
+        const imgTag = document.createElement('img'); imgTag.className='preview'; imgTag.alt='preview'; imgTag.decoding='async'; imgTag.loading='eager';
         const bar = document.createElement('div'); bar.className='bar';
         const file = document.createElement('input'); file.type='file'; file.accept='image/*';
         const hint = document.createElement('div'); hint.className='note'; hint.textContent='Фото '+(idx+1);
         const actions = document.createElement('div'); actions.className='actions';
         const dl = document.createElement('button'); dl.className='btn'; dl.textContent='Скачать PNG';
+
         actions.appendChild(dl);
         bar.appendChild(file); bar.appendChild(hint); bar.appendChild(actions);
         slot.appendChild(imgTag); slot.appendChild(bar);
         results.appendChild(slot);
 
-        const record = {canvas, imgTag, fileInput:file, imgDataUrl:null, imgEl:null, text:""};
+        const rec = {container:slot, canvas, imgTag, fileInput:file, imgDataUrl:null, imgEl:null, text:""};
         file.addEventListener('change', async ()=>{
           if(file.files && file.files[0]){
-            record.imgDataUrl = await dataUrlFromFile(file.files[0]);
-            record.imgEl = await imgFromDataUrl(record.imgDataUrl);
-            await renderSlot(record);
+            rec.imgDataUrl = await dataUrlFromFile(file.files[0]);
+            rec.imgEl = await imgFromDataUrl(rec.imgDataUrl);
+            await renderSlot(rec);
           }
         });
         dl.addEventListener('click', ()=> downloadCanvasPNG(canvas, idx));
-        slots.push(record);
+        slots.push(rec);
       }
-      // удалить лишние
       while(slots.length > count){
         const rec = slots.pop();
         rec.container.remove();
@@ -186,13 +173,16 @@
     }
 
     function downloadCanvasPNG(canvas, index){
-      const a=document.createElement('a');
-      a.href=canvas.toDataURL('image/png');
-      a.download=`result_${String(index+1).padStart(2,'0')}.png`;
-      document.body.appendChild(a); a.click(); a.remove();
+      try{
+        const a=document.createElement('a');
+        a.href=canvas.toDataURL('image/png');
+        a.download=`result_${String(index+1).padStart(2,'0')}.png`;
+        document.body.appendChild(a); a.click(); a.remove();
+      }catch(e){}
     }
 
     async function renderSlot(rec){
+      // размеры
       const W = overlayImg? overlayImg.naturalWidth : (rec.imgEl? rec.imgEl.naturalWidth : 1080);
       const H = overlayImg? overlayImg.naturalHeight: (rec.imgEl? rec.imgEl.naturalHeight: 1920);
 
@@ -213,10 +203,14 @@
       const y = Math.max(10, yBottom - blockH - 4);
       const x = FIX_LEFT;
       for(let i=0;i<lines.length;i++) ctx.fillText(lines[i], x, y + i*step);
-      try{ rec.imgTag.src = c.toDataURL('image/png'); }catch(e){}
 
-      // обновляем img для долгого тапа «Сохранить изображение»
-      try{ rec.imgTag.src = c.toDataURL('image/png'); }catch(e){}
+      // обновляем видимое превью (для долгого тапа «Сохранить изображение»)
+      try{
+        const url = c.toDataURL('image/png');
+        // если браузер «не сразу» показывает, продублируем обновление в microtask
+        rec.imgTag.src = '';
+        queueMicrotask(()=>{ rec.imgTag.src = url; rec.imgTag.style.display='block'; });
+      }catch(e){}
     }
 
     async function renderAll(){
@@ -225,21 +219,14 @@
       for(let i=0;i<slots.length;i++){
         slots[i].text = paras[i] || '';
         await renderSlot(slots[i]);
-        // превью для долгого тапа
       }
     }
 
-    // ====== events ======
     captionsEl.addEventListener('input', renderAll);
     [fontSize,lineHeight,fontColor].forEach(el=> el.addEventListener('input', renderAll));
-
-    downloadAllBtn.addEventListener('click', ()=>{
-      for(let i=0;i<slots.length;i++) downloadCanvasPNG(slots[i].canvas, i);
-    });
-
+    downloadAllBtn.addEventListener('click', ()=>{ for(let i=0;i<slots.length;i++) downloadCanvasPNG(slots[i].canvas, i); });
     reloadBgBtn.addEventListener('click', async ()=>{ await loadBackground(); await renderAll(); });
 
-    // ====== init ======
     (async()=>{ await loadBackground(); await renderAll(); })();
   </script>
 </body>
