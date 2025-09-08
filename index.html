@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Text & PNG Overlay Maker — fast</title>
   <style>
-    /* Встроенный шрифт (положи Aeroport-Bold.ttf рядом с index.html) */
     @font-face {
       font-family: 'Aeroport';
       src: url('Aeroport-Bold.ttf') format('truetype');
@@ -24,7 +23,6 @@
     textarea{min-height:140px;resize:vertical;border-radius:10px;border:1px solid var(--stroke);background:rgba(255,255,255,.03);color:var(--text);padding:10px}
     input,select{border-radius:10px;border:1px solid var(--stroke);background:rgba(255,255,255,.03);color:var(--text);padding:8px}
     .row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-    .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
     .controls{display:grid;gap:8px}
     .btn{cursor:pointer;border-radius:12px;border:1px solid var(--stroke);background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.03));padding:10px;font-weight:600;color:var(--text)}
     .btn:hover{background:linear-gradient(180deg,rgba(255,255,255,.12),rgba(255,255,255,.05))}
@@ -63,10 +61,6 @@
           <div>
             <label>Цвет текста</label>
             <input id="fontColor" type="text" value="#ffffff" />
-          </div>
-          <div class="inline">
-            <input id="shadow" type="checkbox" checked style="width:auto" />
-            <label for="shadow" style="margin:0">Лёгкая тень (лучше видно на светлом)</label>
           </div>
         </div>
 
@@ -116,7 +110,6 @@
   </div>
 
   <script>
-    // ===== helpers =====
     const $ = (id)=>document.getElementById(id);
     const imagesInput  = $("imagesInput");
     const captionsEl   = $("captions");
@@ -127,7 +120,6 @@
     const padding      = $("padding");
     const safeBottom   = $("safeBottom");
     const textWidthPct = $("textWidthPct");
-    const shadow       = $("shadow");
     const results      = $("results");
     const overlayStatus= $("overlayStatus");
     const overlayFile  = $("overlayFile");
@@ -155,8 +147,7 @@
     function drawMultiline(ctx, lines, x, y){
       ctx.textAlign = textAlign.value;
       ctx.textBaseline = "top";
-      if(shadow.checked){ ctx.shadowColor='rgba(0,0,0,.6)'; ctx.shadowBlur=6; ctx.shadowOffsetY=2; }
-      else { ctx.shadowBlur=0; ctx.shadowOffsetY=0; }
+      ctx.shadowBlur=0; ctx.shadowOffsetY=0;
       const step = parseInt(fontSize.value,10) * (parseFloat(lineHeight.value)/100);
       for(let i=0;i<lines.length;i++){
         const ly = y + i * step;
@@ -165,7 +156,6 @@
       }
     }
 
-    // ===== overlay (быстро) =====
     let overlayImg = null;
     async function findOverlayFast(){
       overlayImg = null;
@@ -174,7 +164,7 @@
       let resolved = false;
 
       await Promise.race([
-        new Promise((res)=>setTimeout(()=>res('timeout'), 1200)), // жёсткий таймаут
+        new Promise((res)=>setTimeout(()=>res('timeout'), 1200)),
         new Promise((res)=>{
           let left = names.length;
           names.forEach((n)=>{
@@ -195,10 +185,8 @@
       catch{ overlayStatus.textContent = 'Подложка: ошибка загрузки'; overlayImg=null; }
     });
 
-    // стартовый быстрый поиск
     findOverlayFast();
 
-    // ===== render =====
     function objectFitCoverDraw(ctx, img, W, H){
       const scale = Math.max(W/img.naturalWidth, H/img.naturalHeight);
       const drawW = img.naturalWidth*scale;
@@ -223,11 +211,8 @@
         const c = document.createElement('canvas'); c.width=W; c.height=H;
         const ctx = c.getContext('2d');
 
-        // 1) фото
         objectFitCoverDraw(ctx, photo, W, H);
-        // 2) подложка
         if(overlayImg) ctx.drawImage(overlayImg, 0, 0, W, H);
-        // 3) текст поверх всего
         ctx.font = `700 ${parseInt(fontSize.value,10)}px Aeroport, system-ui, sans-serif`;
         const maxW = Math.round(W * (parseInt(textWidthPct.value,10)/100));
         const lines = (captions[i]||'').trim()? wrapText(ctx, captions[i], maxW) : [];
